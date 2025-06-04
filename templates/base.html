@@ -1,0 +1,32 @@
+{# templates/base.html #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}{% endblock %} - Silmar</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Inicio</a>
+      <a href="/escanear">Escanear</a>
+      <a href="/despachar">Despachar</a>
+      <a href="/historial">Historial</a>
+      <a href="/configuracion">Configuración</a>
+      {% if usuario %}
+        <a href="/logout">Cerrar Sesión</a>
+      {% else %}
+        <a href="/login">Iniciar Sesión</a>
+        <a href="/register">Registrarse</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <section>
+    {% block content %}{% endblock %}
+  </section>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

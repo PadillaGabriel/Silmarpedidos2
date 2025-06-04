@@ -1,0 +1,260 @@
+
+{% extends "base.html" %}
+{% block title %}Nombre de la página{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>🔍 Escanear Pedido</h2>
+
+  <!-- Contenedor centrado para el lector QR -->
+  <div id="reader-container" style="display:flex; justify-content:center; margin-top:1rem;">
+    <div id="reader" style="width:400px; height:300px;"></div>
+  </div>
+  <div style="text-align:center; margin-top:0.5rem;">
+    <button id="stop-btn" class="btn">Detener escaneo</button>
+  </div>
+
+  <hr style="margin: 2rem 0;">
+
+  <p><strong>O subí una imagen de QR:</strong></p>
+  <input type="file" id="input-escanear" accept="image/*" class="mt-1"><br><br>
+
+  <p><strong>O ingresá el ID manualmente:</strong></p>
+  <div style="display:flex; align-items:center;">
+    <input
+      type="text"
+      id="manual-id"
+      placeholder="Ingresar ID de pedido"
+      style="flex:1; padding:0.5rem; border:1px solid #ccc; border-radius:4px;">
+    <button class="btn" onclick="buscarManual()" style="margin-left:1rem;">Buscar</button>
+  </div>
+</div>
+
+<!-- Detalle del pedido -->
+<div id="detalle-pedido" class="card" style="display:none; margin-top:2rem;">
+  <h3>📦 Detalle del Pedido</h3>
+  <p><strong>Cliente:</strong> <span id="cliente"></span></p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left; padding:0.5rem;">Imagen</th>
+        <th style="text-align:left; padding:0.5rem;">Título</th>
+        <th style="text-align:left; padding:0.5rem;">SKU</th>
+        <th style="text-align:left; padding:0.5rem;">Variante</th>
+        <th style="text-align:left; padding:0.5rem;">Cantidad</th>
+      </tr>
+    </thead>
+    <tbody id="tabla-items"></tbody>
+  </table>
+
+  <div class="text-center mt-2">
+    <button id="boton-armar" class="btn" style="display:none;">✅ Marcar como armado</button>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block scripts %}
+<script src="/static/html5-qrcode.min.js"></script>
+<script>
+let scanner;
+let ultimoOrderId = null;
+let ultimoShipId  = null;
+
+// Función que se llama cuando se detecta un QR
+async function escanear(raw) {
+  // 1) Interpretamos el QR (puede traer JSON, URL o ID plano)
+  const { order_id, shipment_id } = parseQr(raw);
+  ultimoOrderId = order_id || null;
+  ultimoShipId  = shipment_id || null;
+
+  if (!shipment_id) {
+    return alert("❌ El QR no incluye un shipment_id válido.");
+  }
+
+  // 2) Enviamos el shipment_id al backend para obtener detalle completo
+  const form = new FormData();
+  form.append("shipment_id", shipment_id);
+
+  try {
+    const res = await fetch("/escanear", {
+      method: "POST",
+      body: form
+    });
+
+    const rawText = await res.clone().text();
+    console.group("🔍 RAW response (/escanear)");
+    console.log(rawText);
+    console.groupEnd();
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      console.error("❌ No es JSON válido (/escanear):", e);
+      return alert("❌ La respuesta no es JSON válido.");
+    }
+
+    console.group("🔍 Parsed JSON (/escanear)");
+    console.log(data);
+    console.groupEnd();
+
+    if (!res.ok) {
+      const err = data.error || res.statusText;
+      return alert(`❌ (${res.status}) ${err}`);
+    }
+
+    // 3) Rellenamos la tabla de items (varios orders bajo el mismo shipment_id)
+    document.getElementById("cliente").innerText = data.detalle.cliente;
+    const tabla = document.getElementById("tabla-items");
+    tabla.innerHTML = "";
+
+    data.detalle.items.forEach(item => {
+      const imgUrl = (Array.isArray(item.imagenes) && item.imagenes.length)
+        ? item.imagenes[0].thumbnail
+        : "https://via.placeholder.com/150";
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
+          <img src="${imgUrl}" width="80" style="border-radius:4px;">
+        </td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.titulo}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
+      `;
+      tabla.appendChild(row);
+    });
+
+    // 4) Mostramos el detalle y habilitamos “Marcar como armado”
+    document.getElementById("detalle-pedido").style.display = "block";
+    document.getElementById("boton-armar").style.display   = "inline-block";
+
+  } catch (err) {
+    console.error(err);
+    alert("❌ Error al obtener detalles del pedido.");
+  }
+}
+
+// Interpreta el contenido del QR (JSON, URL o ID plano)
+function parseQr(decoded) {
+  let order_id = null, shipment_id = null;
+
+  // Si comienza con “{“, lo tratamos de JSON
+  if (decoded.trim().startsWith("{")) {
+    try {
+      const payload = JSON.parse(decoded);
+      if (payload.id) {
+        shipment_id = payload.id;
+        return { order_id: null, shipment_id };
+      }
+    } catch (e) {
+      // no era JSON válido → seguimos
+    }
+  }
+
+  // Si parece una URL, extraemos path
+  try {
+    const url = new URL(decoded);
+    const parts = url.pathname.split("/");
+    const tipo = parts[1], id = parts[2];
+    if (tipo === "shipments")    shipment_id = id;
+    else if (tipo === "orders")  order_id = id;
+    return { order_id, shipment_id };
+  } catch (e) {
+    // no era URL → seguimos
+  }
+
+  // Si no es JSON ni URL, asumimos que es order_id directo (pero necesitamos shipment_id)
+  order_id = decoded.trim();
+  return { order_id, shipment_id: null };
+}
+
+// ——————————————————————————————————————————————————
+// Botón “Detener / Reanudar escaneo”
+// ——————————————————————————————————————————————————
+function iniciarEscaneo() {
+  scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    decoded => {
+      scanner.stop()
+        .then(() => document.getElementById("stop-btn").innerText = "Reanudar escaneo")
+        .catch(console.error);
+      escanear(decoded);
+    },
+    err => {
+      // errores menores ignorados
+    }
+  );
+}
+
+document.getElementById("stop-btn").addEventListener("click", () => {
+  if (scanner && scanner._isScanning) {
+    scanner.stop().then(() => {
+      document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+    });
+  } else {
+    iniciarEscaneo();
+    document.getElementById("stop-btn").innerText = "Detener escaneo";
+  }
+});
+
+// ——————————————————————————————————————————————————
+// Búsqueda manual
+// ——————————————————————————————————————————————————
+function buscarManual() {
+  const id = document.getElementById("manual-id").value.trim();
+  if (id) {
+    escanear(id);
+  }
+}
+
+// ——————————————————————————————————————————————————
+// Escaneo desde archivo de imagen
+// ——————————————————————————————————————————————————
+document.getElementById("input-escanear").addEventListener("change", e => {
+  if (!e.target.files.length) return;
+  const qrImg = new Html5Qrcode("reader");
+  qrImg.scanFile(e.target.files[0], true)
+    .then(decoded => {
+      qrImg.clear();
+      escanear(decoded);
+    })
+    .catch(() => alert("❌ No se pudo leer el QR."));
+});
+
+// ——————————————————————————————————————————————————
+// Al cargar la página, arrancamos la cámara automáticamente
+// ——————————————————————————————————————————————————
+window.addEventListener("DOMContentLoaded", iniciarEscaneo);
+
+// ——————————————————————————————————————————————————
+// “Marcar como armado” (envía solo el shipment_id al backend)
+// ——————————————————————————————————————————————————
+document.getElementById("boton-armar").addEventListener("click", () => {
+  if (!ultimoShipId) {
+    return alert("❌ No hay ningún shipment_id válido para marcar como armado.");
+  }
+
+  const form = new FormData();
+  form.append("shipment_id", ultimoShipId);
+
+  fetch("/armar", {
+    method: "POST",
+    body: form
+  })
+  .then(r => r.json())
+  .then(resp => {
+    if (resp.success) {
+      alert("✅ Pedido(s) marcados como armado");
+      window.location.reload();
+    } else {
+      alert(`❌ ${resp.error || "No se pudo marcar como armado"}`);
+    }
+  })
+  .catch(() => alert("❌ Error al marcar armado"));
+});
+</script>
+{% endblock %}

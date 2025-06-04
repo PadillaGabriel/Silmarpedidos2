@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Nombre de la página{% endblock %}
+{% block content %}
+
+
+<main>
+  <div class="card mb-4">
+    <div class="card-body">
+      <h2>Escanear Pedido</h2>
+      <div id="reader-container" style="display:flex; justify-content:center; margin-top:1rem;">
+        <div id="reader" style="width:400px; height:300px;"></div>
+      </div>
+      <div style="text-align:center; margin-top:0.5rem;">
+        <button id="stop-btn" class="btn">Detener escaneo</button>
+      </div>
+      <hr style="margin: 2rem 0;">
+      <p><strong>O subí una imagen de QR:</strong></p>
+      <input type="file" id="input-escanear" accept="image/*" class="mt-1"><br><br>
+      <p><strong>O ingresá el ID manualmente:</strong></p>
+      <div style="display:flex; align-items:center;">
+        <input
+          type="text"
+          id="manual-id"
+          placeholder="Ingresar ID de pedido"
+          style="flex:1; padding:0.5rem; border:1px solid #ccc; border-radius:4px;">
+        <button class="btn" id="btn-manual" style="margin-left:1rem;">Buscar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="detalle-pedido" class="card mb-4" style="display:none;">
+    <div class="card-body">
+      <h3>Detalle del Pedido</h3>
+      <p><strong>Cliente:</strong> <span id="cliente"></span></p>
+      <table class="detail-table">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:0.5rem;">Imagen</th>
+            <th style="text-align:left; padding:0.5rem;">Título</th>
+            <th style="text-align:left; padding:0.5rem;">SKU</th>
+            <th style="text-align:left; padding:0.5rem;">Variante</th>
+            <th style="text-align:left; padding:0.5rem;">Cantidad</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-items-despachar"></tbody>
+      </table>
+      <hr class="section-divider" />
+
+      <form id="despachar-form" method="post" action="/despachar">
+        <input type="hidden" id="order_id_hidden" name="order_id" value="">
+        <input type="hidden" id="shipment_id_hidden" name="shipment_id" value="">
+        <div style="margin-top:1rem;">
+          <label for="logistica">Logística</label>
+          <select id="logistica" name="logistica" required>
+            <option value="" disabled selected>Seleccione una logística</option>
+            {% for l in logisticas %}
+              <option value="{{ l }}">{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="margin-top:1rem;">
+          <label for="tipo_envio">Tipo de Envío</label>
+          <select id="tipo_envio" name="tipo_envio" required>
+            <option value="" disabled selected>Seleccione tipo de envío</option>
+            <option value="Flex">Flex</option>
+            <option value="Colecta">Colecta</option>
+          </select>
+        </div>
+        <button type="submit" style="margin-top:1.5rem;">Despachar Pedido</button>
+      </form>
+
+      <div id="message" class="mt-3"></div>
+    </div>
+  </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/html5-qrcode.min.js"></script>
+<script>
+  let scanner;
+  let ultimoOrderId = "";
+  let ultimoShipId = "";
+
+  function iniciarEscaneo() {
+    scanner = new Html5Qrcode("reader");
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      decoded => {
+        scanner.stop().catch(console.error);
+        escanear(decoded);
+      },
+      () => {}
+    ).catch(console.error);
+  }
+
+  function mostrarDetalle(detalle) {
+    document.getElementById("cliente").innerText = detalle.cliente;
+    const tabla = document.getElementById("tabla-items-despachar");
+    tabla.innerHTML = "";
+    detalle.items.forEach(item => {
+      const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
+        ? item.imagenes[0].thumbnail
+        : "https://via.placeholder.com/150";
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
+          <img src="${imgUrl}" width="80" style="border-radius:4px;">
+        </td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.titulo}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
+      `;
+      tabla.appendChild(row);
+    });
+    ultimoOrderId = detalle.primer_order_id || "";
+    document.getElementById("order_id_hidden").value = ultimoOrderId;
+    document.getElementById("shipment_id_hidden").value = ultimoShipId;
+    document.getElementById("detalle-pedido").style.display = "block";
+  }
+
+async function escanear(raw) {
+  let shipmentVal;
+  try {
+    // Si raw es un JSON válido, extraer el id
+    const obj = JSON.parse(raw);
+    shipmentVal = obj.id;
+  } catch {
+    // Si no es JSON, asumir que raw ya es el ID
+    shipmentVal = raw;
+  }
+  ultimoShipId = shipmentVal;
+  document.getElementById("shipment_id_hidden").value = shipmentVal;
+
+  const form = new FormData();
+  form.append("shipment_id", shipmentVal);
+
+  try {
+    const res = await fetch("/escanear", {
+      method: "POST",
+      body: form
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (data.success) mostrarDetalle(data.detalle);
+  } catch {
+    alert("Error al obtener detalles del pedido.");
+  }
+}
+
+
+  function buscarManual() {
+    const id = document.getElementById("manual-id").value.trim();
+    if (id) escanear(id);
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    iniciarEscaneo();
+    document.getElementById("stop-btn").addEventListener("click", () => {
+      if (scanner && scanner._isScanning) {
+        scanner.stop().then(() => {
+          document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+        });
+      } else {
+        iniciarEscaneo();
+        document.getElementById("stop-btn").innerText = "Detener escaneo";
+      }
+    });
+    document.getElementById("input-escanear").addEventListener("change", e => {
+      if (!e.target.files.length) return;
+      const qrImg = new Html5Qrcode("reader");
+      qrImg.scanFile(e.target.files[0], true)
+        .then(decoded => {
+          qrImg.clear();
+          escanear(decoded);
+        })
+        .catch(() => alert("No se pudo leer el QR."));
+    });
+    document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
+    document.getElementById("despachar-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const messageDiv = document.getElementById("message");
+      messageDiv.innerHTML = "";
+      try {
+        const resp = await fetch("/despachar", {
+          method: "POST",
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          messageDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+          return;
+        }
+        messageDiv.innerHTML = `<div class="alert alert-success">${data.mensaje}</div>`;
+      } catch {
+        messageDiv.innerHTML = `<div class="alert alert-danger">Error al conectar con el servidor</div>`;
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,1070 @@
+/* =====================
+   Variables y resets
+   ===================== */
+   :root {
+    --primary: #0a273f;
+    --light-bg: #f5f5f5;
+    --card-bg: #ffffff;
+    --card-shadow: rgba(0, 0, 0, 0.05);
+    --text-main: #333333;
+    --text-light: #666666;
+    --border-radius: 8px;
+    --spacing: 16px;
+    --transition: 0.2s ease-in-out;
+  }
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: "Segoe UI", Roboto, sans-serif;
+    background: var(--light-bg);
+    color: var(--text-main);
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  /* =====================
+     Header (GLOBAL)
+     ===================== */
+  header {
+    background: var(--primary);
+    color: white;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing) calc(var(--spacing) * 2);
+  }
+  
+  header h1 {
+    display: flex;
+    align-items: center;
+    color: white;
+  }
+  
+  .header-logo {
+    height: 32px;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+  
+  header .logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-decoration: none;
+    color: white;
+  }
+  
+  header nav {
+    display: flex;
+    gap: var(--spacing);
+  }
+  
+  header nav a {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity var(--transition);
+  }
+  
+  header nav a:hover {
+    opacity: 0.8;
+  }
+  
+  /* =====================
+     Layout general
+     ===================== */
+  main {
+    flex: 1;
+    max-width: 900px;
+    margin: var(--spacing) auto;
+    padding: 0 var(--spacing);
+  }
+  
+  footer {
+    text-align: center;
+    padding: var(--spacing);
+    background: #e0e0e0;
+    color: var(--text-light);
+    font-size: 0.9rem;
+  }
+  
+  /* =====================
+     Botones
+     ===================== */
+  .btn {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 0.75em 1.5em;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: filter var(--transition);
+    text-align: center;
+    text-decoration: none; 
+  }
+  
+  .btn:hover {
+    filter: brightness(1.1);
+  }
+  
+  .btn-primary {
+    background: var(--primary);
+  }
+  
+  .btn-secondary {
+    background: #888888;
+  }
+  
+  /* =====================
+     Tarjetas
+     ===================== */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: 0 2px 8px var(--card-shadow);
+    padding: var(--spacing);
+    margin-bottom: var(--spacing);
+  }
+  
+  .card-title {
+    font-size: 1.25rem;
+    margin-bottom: var(--spacing);
+    color: var(--primary);
+  }
+  
+  /* =====================
+     Inputs / Selects
+     ===================== */
+  .input,
+  .text-input,
+  .file-input,
+  .select-input {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.5em;
+    margin-top: 0.5em;
+    margin-bottom: var(--spacing);
+    border: 1px solid #ccc;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    transition: border var(--transition);
+  }
+  
+  .input:focus,
+  .text-input:focus,
+  .file-input:focus,
+  .select-input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  
+  /* =====================
+     Formularios inline
+     ===================== */
+  .form-group-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+  }
+  
+  /* =====================
+     Scanner (QR)
+     ===================== */
+  .qr-reader {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    margin: var(--spacing) auto;
+    border: 1px solid #ddd;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+  }
+  
+  .qr-reader::before {
+    content: "";
+    display: block;
+    padding-top: 100%;
+  }
+  
+  .qr-reader video,
+  .qr-reader canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  /* =====================
+     Divider entre secciones
+     ===================== */
+  .divider {
+    font-weight: 500;
+    margin-top: var(--spacing);
+    margin-bottom: 0.5em;
+    color: var(--text-light);
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 0.25em;
+  }
+  
+  .section-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: var(--spacing) 0;
+  }
+  
+  /* =====================
+     Tablas base
+     ===================== */
+  .detail-table,
+  .history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing);
+  }
+  
+  .detail-table th,
+  .detail-table td,
+  .history-table th,
+  .history-table td {
+    padding: 0.75em;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.95rem;
+  }
+  
+  .detail-table th,
+  .history-table thead th {
+    background: var(--light-bg);
+    color: var(--text-light);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  
+  .detail-table tr:nth-child(even) td,
+  .history-table tbody tr:nth-child(even) td {
+    background: var(--card-bg);
+  }
+  
+  .detail-table .no-results,
+  .history-table .no-results {
+    text-align: center;
+    color: var(--text-light);
+  }
+  
+  /* =====================
+     Pantalla de inicio
+     ===================== */
+  .page-title {
+    text-align: center;
+    margin-bottom: var(--spacing);
+    font-size: 2rem;
+    color: var(--primary);
+  }
+  
+  .home-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing);
+    margin-top: var(--spacing);
+  }
+  
+  .home-buttons .btn {
+    width: auto;
+    min-width: 160px;
+  }
+  
+  /* =====================
+     Form filtros
+     ===================== */
+  .form-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing);
+    margin-bottom: var(--spacing);
+    align-items: flex-end;
+  }
+  
+  .form-filters > div {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .form-filters .filter-button {
+    margin-left: auto;
+  }
+  
+  .form-filters-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .form-filters-inline .small {
+    padding: 0.4em 0.6em;
+    font-size: 0.85rem;
+  }
+  
+  .form-filters-inline .text-input.small,
+  .form-filters-inline .select-input.small {
+    width: auto;
+    min-width: 100px;
+  }
+  
+  .form-filters-inline .btn.small {
+    white-space: nowrap;
+    margin-left: 1rem;
+  }
+    
+  /* =====================
+     Contenedor de tablas con scroll
+     ===================== */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: var(--spacing);
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* =====================
+     Imágenes y SVG fluidos
+     ===================== */
+  img,
+  svg {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* =====================
+     Mostrar/ocultar según tamaño
+     ===================== */
+  .desktop-only {
+    display: block;
+  }
+  
+  .mobile-only {
+    display: none;
+  }
+  
+  /* =====================
+     Ajustes para móvil (max-width: 600px)
+     ===================== */
+  @media (max-width: 600px) {
+    /* Header y navegación */
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: var(--spacing);
+    }
+    header .logo {
+      font-size: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    header nav {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-top: 0.5rem;
+    }
+    header nav a {
+      flex: 0 0 auto;
+      margin: 0 0.75rem 0 0;
+      font-size: 0.9rem;
+      padding: 0.25em 0;
+    }
+  
+    /* Contenedor principal */
+    main {
+      max-width: calc(100vw - 2 * var(--spacing));
+      margin: var(--spacing) auto;
+      padding: 0 var(--spacing);
+    }
+  
+    /* Botones */
+    .btn {
+      width: 100%;
+      padding: 1rem;
+      font-size: 1.1rem;
+    }
+    .home-buttons .btn {
+      min-width: 0;
+      width: 100%;
+    }
+  
+    /* Tarjetas */
+    .card {
+      padding: 0.75rem;
+      margin-bottom: var(--spacing);
+    }
+    .card-title {
+      font-size: 1rem;
+    }
+  
+    /* Inputs, selects y QR */
+    .input,
+    .text-input,
+    .file-input,
+    .select-input,
+    .qr-reader {
+      max-width: 100%;
+    }
+  
+    /* Títulos */
+    .page-title {
+      font-size: 1.5rem;
+    }
+  
+    /* Footer */
+    footer {
+      padding: var(--spacing) 0.5rem;
+      font-size: 0.8rem;
+    }
+  
+    /* Formularios inline */
+    .form-group-inline {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  
+    /* Tablas (detalle e historial) */
+    .detail-table th,
+    .detail-table td,
+    .history-table th,
+    .history-table td {
+      white-space: nowrap;
+      font-size: 0.85rem;
+      padding: 0.5em;
+    }
+  
+    /* Divider adicional entre secciones */
+    .section-divider {
+      margin: var(--spacing) 0;
+    }
+  
+    /* Mostrar cards de historial */
+    .desktop-only {
+      display: none;
+    }
+    .mobile-only {
+      display: block;
+    }
+    .history-card {
+      margin-bottom: var(--spacing);
+      padding: var(--spacing);
+    }
+  }
+  /* =====================
+   Mostrar/ocultar según tamaño (GLOBAL)
+   ===================== */
+.desktop-only { display: block !important; }
+.mobile-only  { display: none  !important; }
+
+@media (max-width: 600px) {
+  .desktop-only { display: none  !important; }
+  .mobile-only  { display: block !important; }
+}
+
+  /* =============================
+   Filtros Historial Responsivos
+   ============================= */
+.form-filters-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+/* Cada filtro con label + input/select */
+.form-filters-inline .filter {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 120px;       /* crece, encoge, base 120px */
+  min-width: 90px;
+}
+
+/* Estilo de etiqueta */
+.form-filters-inline .filter label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--text-main);
+}
+
+/* Ajuste especial para el botón */
+.form-filters-inline .filter--button {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  margin-top: var(--spacing);
+}
+
+/* =============================
+   Media Query para móviles
+   ============================= */
+@media (max-width: 600px) {
+  .form-filters-inline {
+    flex-direction: column;
+  }
+  .form-filters-inline .filter {
+    flex: 1 1 100%;      /* ocupan todo el ancho */
+    margin-bottom: var(--spacing);
+  }
+  .form-filters-inline .filter--button {
+    align-self: stretch;  /* botón al 100% */
+  }
+}
+/* =============================
+   Filtros Historial – Layout Grid
+   ============================= */
+   .form-filters-inline {
+    display: grid;
+    /* 4 columnas: cada filtro 1fr (mínimo 120px), y el botón ajusta su ancho */
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) auto;
+    gap: 0.5rem 1rem;            /* 0.5rem vertical, 1rem horizontal */
+    align-items: end;            /* etiquetas e inputs alineados abajo */
+    margin-bottom: var(--spacing);
+  }
+  
+  /* Quitar márgenes extra de cada "filter" */
+  .form-filters-inline .filter {
+    margin: 0;
+  }
+  
+  /* Labels con poco espacio y tamaño discreto */
+  .form-filters-inline .filter label {
+    margin-bottom: 0.8rem;
+    font-size: 0.85rem;
+    color: var(--text-main);
+  }
+  
+  /* Ajuste botón para quedar alineado arriba, sin margen extra */
+  .form-filters-inline .filter--button {
+    align-self: start;
+    margin: 0.2rem 1 2 5rem;  
+  }
+  
+  /* Para móviles, volvemos a una sola columna */
+  @media (max-width: 600px) {
+    .form-filters-inline {
+      grid-template-columns: 1fr;
+      gap: var(--spacing);
+      margin: 0.2rem 1 2 5rem; 
+    }
+  }
+  
+  /* =============================
+   Encabezado y filtros responsivos
+   ============================= */
+.card-header-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+.card-header-filters h2 {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.form-filters-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;      /* 0.5rem entre filas, 1rem entre columnas */
+  flex: 1 1 auto;
+}
+
+.form-filters-inline .filter {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 160px;       /* ancho base 160px, crece o encoge */
+  min-width: 120px;
+}
+
+.form-filters-inline .filter label {
+  margin-bottom: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.form-filters-inline .filter--button {
+  align-self: flex-start;  /* botón al final de la fila */
+}
+
+/* =============================
+   Ajustes finales – Filtros
+   ============================= */
+   .card-header-filters {
+    /* Título + form en la misma línea */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing);
+  }
+  
+  .card-header-filters h2 {
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  
+  .form-filters-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;       /* 0.5rem filas, 1rem columnas */
+    align-items: flex-end;
+    flex: 1 1 auto;
+  }
+  
+  /* Cada filtro ocupa un “slot” mínimo */
+  .form-filters-inline .filter {
+    flex: 0 1 150px;        /* base 150px, crece o encoge */
+    min-width: 120px;
+  }
+  
+  /* Botón siempre al final y a la derecha */
+  .form-filters-inline .filter--button {
+    order: 999;             /* lo último */
+    flex: 0 1 auto;
+    align-self: flex-start;
+    margin-left: auto;
+  }
+  
+  /* =============================
+     Versión móvil (<600px)
+     ============================= */
+  @media (max-width: 600px) {
+    .card-header-filters {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .form-filters-inline {
+      flex-direction: column;
+      gap: var(--spacing);
+    }
+    .form-filters-inline .filter,
+    .form-filters-inline .filter--button {
+      flex: 1 1 100%;
+      margin: 0;
+    }
+    .form-filters-inline .filter--button {
+      align-self: center;   /* botón centrado */
+      margin-top: 0.5rem;
+    }
+  }
+  
+
+  @media (max-width: 600px) {
+    /* Asegura que el header de filtros ocupe todo el ancho y alinee a la izquierda */
+    .card-header-filters {
+      flex-direction: column !important;
+      align-items: stretch !important;
+    }
+  
+    /* El form de filtros en columna, items estirados al 100% */
+    .form-filters-inline {
+      flex-direction: column !important;
+      align-items: stretch !important;  /* ¡Aquí estaba el problema! */
+      gap: var(--spacing);
+    }
+  
+    /* Cada filtro ocupa todo el ancho interno */
+    .form-filters-inline .filter,
+    .form-filters-inline .filter--button {
+      width: 100% !important;
+      margin: 0 !important;
+    }
+  
+    /* Si quieres el botón centrado, déjalo así,
+       o cámbialo a flex-start para que quede a la izquierda */
+    .form-filters-inline .filter--button {
+      align-self: center !important; /* o flex-start */
+      margin-top: 0.5rem !important;
+    }
+  }
+
+/* static/styles.css */
+
+/* 1. Reset básico (opcional) */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+  line-height: 1.5;
+}
+
+/* 2. Cabecera y Navegación */
+header {
+  background-color: #0a1e3b;
+  color: #fff;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-logo {
+  height: 40px;
+  width: auto;
+  margin-right: 0.75rem;
+  vertical-align: middle;
+}
+
+header h1 {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+nav a {
+  color: #ffffff;
+  font-size: 0.95rem;
+  text-decoration: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+nav a:hover {
+  background-color: #1f3660;
+}
+
+/* 3. Contenido principal */
+main {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+/* 4. Títulos de página */
+.page-title {
+  text-align: center;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+  color: #0a1e3b;
+}
+
+/* 5. Botones (“btn”) */
+.btn {
+  display: inline-block;
+  background-color: #0a1e3b;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: center;
+}
+
+.btn:hover {
+  background-color: #1f3660;
+}
+
+/* 6. Mensajes de error */
+.error {
+  color: #cc0000;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+/* 7. Pie de página */
+footer {
+  background-color: #0a1e3b;
+  color: #ccc;
+  text-align: center;
+  padding: 1rem 0;
+  margin-top: 2rem;
+  font-size: 0.9rem;
+}
+
+
+/* =============================
+   Configuración de Logísticas
+   ============================= */
+
+/* Tarjeta principal */
+.card {
+  background: var(--card-bg);
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px var(--card-shadow);
+  margin-bottom: var(--spacing);
+}
+
+/* Cuerpo de la tarjeta */
+.card-body {
+  padding: calc(var(--spacing) * 1.5);
+}
+
+/* Título dentro de la tarjeta */
+.card-title {
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin-bottom: var(--spacing);
+  text-align: center;
+}
+
+/* Inputs de texto (campo de nueva logística) */
+input[type="text"] {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border var(--transition);
+  box-sizing: border-box;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Botones principales */
+.btn {
+  display: inline-block;
+  font-size: 1rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  text-decoration: none;
+  text-align: center;
+}
+
+/* Botón “Agregar” */
+.btn-primary {
+  background-color: var(--primary);
+  color: var(--card-bg);
+  border: none;
+}
+
+.btn-primary:hover {
+  background-color: #081e2f; /* variante más oscura de --primary */
+}
+
+/* Lista de logísticas */
+ul.config-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+ul.config-list li {
+  background: var(--primary);
+  color: var(--card-bg);
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Botón “Volver al Inicio” */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+  border-radius: var(--border-radius);
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+}
+
+.btn-secondary:hover {
+  background-color: var(--primary);
+  color: var(--card-bg);
+}
+
+/* Ajustes para el formulario */
+.form-config {
+  display: flex;
+  gap: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+/* Si tu <ul> no tiene la clase config-list, aplícala aquí */
+.config-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Centrar sección completa */
+.config-section {
+  display: flex;
+  justify-content: center;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+/* =============================
+   Centrados de Auth (Login / Register)
+   ============================= */
+.auth-section {
+  display: flex;
+  justify-content: center;
+  padding: 0 1rem;
+  margin-top: calc(var(--spacing) * 2);
+  margin-bottom: calc(var(--spacing) * 2);
+}
+
+.auth-section .card {
+  width: 100%;
+  max-width: 400px;
+  margin: 0;
+}
+
+.auth-section .card-body {
+  padding: calc(var(--spacing) * 1.5);
+}
+
+.auth-section .card-title {
+  font-size: 1.75rem;
+  color: var(--primary);
+  text-align: center;
+  margin-bottom: var(--spacing);
+}
+
+.auth-section .form-group {
+  margin-bottom: calc(var(--spacing) * 1);
+}
+
+.auth-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-main);
+}
+
+.auth-section input[type="text"],
+.auth-section input[type="password"] {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border var(--transition);
+  box-sizing: border-box;
+}
+
+.auth-section input[type="text"]:focus,
+.auth-section input[type="password"]:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.auth-section .btn-primary {
+  width: 100%;
+  background-color: var(--primary);
+  color: var(--card-bg);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 0.75rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: filter var(--transition);
+}
+
+.auth-section .btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.auth-section .register-link {
+  display: block;
+  text-align: center;
+  margin-top: calc(var(--spacing) * 0.5);
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.auth-section .register-link:hover {
+  text-decoration: underline;
+}
+
+/* =============================
+   Estilos para selects y botón en “Despachar”
+   ============================= */
+
+/* Contenedor de detalle */
+.card-body form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-top: 1.5rem;
+}
+
+/* Etiquetas */
+.card-body form label {
+  grid-column: span 2;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--texto);
+}
+
+/* Selects */
+.card-body form select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  background-color: var(--blanco);
+  color: var(--texto);
+  transition: border 0.2s;
+}
+
+.card-body form select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Botón “Despachar Pedido” */
+.card-body form button {
+  grid-column: span 2;
+  padding: 0.75rem;
+  background-color: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: filter 0.2s;
+  margin-top: 1rem;
+}
+
+.card-body form button:hover {
+  filter: brightness(1.1);
+}

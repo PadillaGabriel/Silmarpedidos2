@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block content %}
+<section class="config-section">
+  <div class="card">
+    <div class="card-body">
+      <h2 class="card-title">⚙️ Configuración de Logísticas</h2>
+
+      <form method="post" class="form-config">
+        <input
+          type="text"
+          name="logistica"
+          placeholder="Nueva logística…"
+          required
+          class="form-control"
+        >
+        <button type="submit" class="btn btn-primary">➕ Agregar</button>
+      </form>
+
+      {% if logisticas %}
+        <ul class="config-list">
+          {% for l in logisticas %}
+            <li>{{ l }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p style="font-style: italic; color: #666; text-align: center;">
+          No hay logísticas configuradas aún.
+        </p>
+      {% endif %}
+
+      <div style="text-align: center; margin-top: 2rem;">
+        <a href="/" class="btn btn-secondary">← Volver al Inicio</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
