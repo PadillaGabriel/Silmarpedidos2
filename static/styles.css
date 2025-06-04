@@ -1068,3 +1068,75 @@ ul.config-list li {
 .card-body form button:hover {
   filter: brightness(1.1);
 }
+
+/* Ajustes generales para móviles */
+@media (max-width: 768px) {
+  /* Secciones centradas ocupen 100% con padding */
+  section.config-section,
+  section.auth-section {
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+
+  /* Tarjetas ocupen todo el ancho disponible */
+  section.config-section .card,
+  section.auth-section .card {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Formularios en dos columnas pasen a una sola columna */
+  .form-config {
+    flex-direction: column;
+  }
+
+  .form-config input[type="text"],
+  .form-config .btn-primary {
+    width: 100%;
+  }
+
+  /* Ajustar reader en despachar para caber en pantalla */
+  #reader {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Ajustar tabla de detalle para scroll horizontal */
+  .detail-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .detail-table th,
+  .detail-table td {
+    white-space: nowrap;
+  }
+
+  /* Formulario en despachar en una sola columna */
+  #despachar-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  #despachar-form label {
+    margin-bottom: 0.25rem;
+  }
+
+  #despachar-form select,
+  #despachar-form button {
+    width: 100%;
+  }
+
+  /* Ajustar inputs y botones de login/register */
+  .auth-section .card {
+    margin: 0 auto;
+  }
+
+  .auth-section input[type="text"],
+  .auth-section input[type="password"],
+  .auth-section .btn-primary {
+    width: 100%;
+  }
+}
