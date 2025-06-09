@@ -23,9 +23,10 @@ from database import (
 )
 from api_ml import get_order_details
 
+
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="tu_clave_super_secreta")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 

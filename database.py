@@ -1,5 +1,5 @@
 # database.py
-
+import os
 import psycopg2
 from psycopg2 import sql
 import logging
@@ -10,16 +10,12 @@ logger = logging.getLogger("uvicorn.error")
 
 
 def get_connection():
-    """
-    Abre una conexión a PostgreSQL usando valores literales.
-    Si prefieres variables de entorno, reemplaza aquí por os.getenv("DB_HOST"), etc.
-    """
     return psycopg2.connect(
-        host="192.168.10.136",
-        port="5433",
-        user="usuario_app",
-        password="ContrasenaSegura",
-        dbname="pedidos_app"
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT")),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        dbname=os.getenv("DB_NAME")
     )
 
 
