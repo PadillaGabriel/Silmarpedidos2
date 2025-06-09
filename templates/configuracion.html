@@ -1,38 +1,42 @@
+{# templates/configuracion.html #}
 {% extends "base.html" %}
 {% block title %}Configuración{% endblock %}
 {% block content %}
-<section class="config-section">
-  <div class="card">
-    <div class="card-body">
-      <h2 class="card-title">⚙️ Configuración de Logísticas</h2>
+<main class="p-4">
+  <h2>Configuración de Logísticas</h2>
 
-      <form method="post" class="form-config">
+  <div class="card mb-4">
+    <div class="card-body">
+      <form action="/configuracion" method="post">
+        <label for="logistica">Nueva Logística:</label>
         <input
           type="text"
           name="logistica"
-          placeholder="Nueva logística…"
-          required
+          id="logistica"
           class="form-control"
-        >
-        <button type="submit" class="btn btn-primary">➕ Agregar</button>
+          placeholder="Ingrese el nombre de la logística"
+          required
+        />
+        <button type="submit" class="btn btn-primary mt-2">
+          Agregar
+        </button>
       </form>
+    </div>
+  </div>
 
+  <div class="card">
+    <div class="card-body">
+      <h3>Logísticas disponibles</h3>
       {% if logisticas %}
-        <ul class="config-list">
-          {% for l in logisticas %}
-            <li>{{ l }}</li>
+        <ul class="list-group">
+          {% for loc in logisticas %}
+            <li class="list-group-item">{{ loc }}</li>
           {% endfor %}
         </ul>
       {% else %}
-        <p style="font-style: italic; color: #666; text-align: center;">
-          No hay logísticas configuradas aún.
-        </p>
+        <p>No hay logísticas configuradas.</p>
       {% endif %}
-
-      <div style="text-align: center; margin-top: 2rem;">
-        <a href="/" class="btn btn-secondary">← Volver al Inicio</a>
-      </div>
     </div>
   </div>
-</section>
+</main>
 {% endblock %}
