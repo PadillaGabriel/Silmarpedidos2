@@ -83,18 +83,30 @@
   let ultimoOrderId = "";
   let ultimoShipId = "";
 
-  function iniciarEscaneo() {
-    scanner = new Html5Qrcode("reader");
-    scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      decoded => {
-        scanner.stop().catch(console.error);
-        escanear(decoded);
-      },
-      () => {}
-    ).catch(console.error);
-  }
+ function iniciarEscaneo() {
+  scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    decoded => {
+      console.log("✅ QR decodificado:", decoded);
+      scanner.stop().catch(err => console.error("Error al detener scanner:", err));
+      escanear(decoded);
+    },
+    err => {
+      // Este callback se ejecuta en cada fallo de lectura, sin abortar el stream
+      console.warn("Intento de lectura fallido:", err);
+    }
+  )
+  .then(() => {
+    console.log("🎥 Cámara arrancada correctamente");
+  })
+  .catch(err => {
+    console.error("❌ No se pudo iniciar el scanner:", err);
+    alert("Error al iniciar la cámara: " + err.message);
+  });
+}
+
 
   function mostrarDetalle(detalle) {
     document.getElementById("cliente").innerText = detalle.cliente;
