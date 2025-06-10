@@ -4,3 +4,5 @@ jinja2
 python-multipart
 itsdangerous
 requests
+psycopg2-binary
+passlib[bcrypt] 
