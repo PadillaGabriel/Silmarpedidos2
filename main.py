@@ -1,6 +1,6 @@
 import logging
 import psycopg2
-
+import os
 from passlib.hash import bcrypt
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
