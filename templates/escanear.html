@@ -65,29 +65,36 @@
   let ultimoShipId = "";
 
 
- function iniciarEscaneo() {
+ async function iniciarEscaneo() {
+  // Pedimos la lista de cámaras disponibles
+  const devices = await Html5Qrcode.getCameras();
+  if (!devices || !devices.length) {
+    return alert("No se detectaron cámaras en este dispositivo.");
+  }
+
+  // Buscamos la trasera (environment) por etiqueta
+  let cameraId = devices[0].id; 
+  const back = devices.find(d => /back|rear|environment/i.test(d.label));
+  if (back) cameraId = back.id;
+
   scanner = new Html5Qrcode("reader");
   scanner.start(
-    { facingMode: "environment" },
+    cameraId,                     // pasamos el ID en vez de facingMode
     { fps: 10, qrbox: 250 },
     decoded => {
       console.log("✅ QR decodificado:", decoded);
-      scanner.stop().catch(err => console.error("Error al detener scanner:", err));
+      scanner.stop().catch(console.error);
       escanear(decoded);
     },
-    err => {
-      // Este callback se ejecuta en cada fallo de lectura, sin abortar el stream
-      console.warn("Intento de lectura fallido:", err);
-    }
+    err => console.warn("Falló lectura:", err)
   )
-  .then(() => {
-    console.log("🎥 Cámara arrancada correctamente");
-  })
+  .then(() => console.log("🎥 Cámara iniciada con ID", cameraId))
   .catch(err => {
-    console.error("❌ No se pudo iniciar el scanner:", err);
-    alert("Error al iniciar la cámara: " + err.message);
+    console.error("❌ Error al iniciar cámara con ID", cameraId, err);
+    alert("No se pudo iniciar el escáner:\n" + err.message);
   });
 }
+
   window.addEventListener("DOMContentLoaded", () => {
     iniciarEscaneo();
 
