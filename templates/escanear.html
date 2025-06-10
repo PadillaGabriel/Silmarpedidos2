@@ -61,38 +61,38 @@
 {% block scripts %}
 <script src="/static/html5-qrcode.min.js"></script>
 <script>
-  window.addEventListener("DOMContentLoaded", () => {
-    let scanner;
-    let ultimoShipId = "";
+  let scanner;
+  let ultimoShipId = "";
 
-    function iniciarEscaneo() {
-      Html5Qrcode.getCameras()
-        .then(cameras => {
-          if (!cameras.length) return alert("No hay cámaras disponibles.");
-          const cameraId = cameras[0].id;
-          scanner = new Html5Qrcode("reader");
-          scanner.start(
-            cameraId,
-            { fps: 10, qrbox: 250 },
-            decoded => {
-              scanner.stop().catch(console.error);
-              escanear(decoded);
-            },
-            _ => {}
-          ).catch(err => {
-            console.error("Error al iniciar Html5Qrcode:", err);
-            alert("No se pudo iniciar el escáner. Revisa permisos de cámara.");
-          });
-        })
-        .catch(err => {
-          console.error("Error al obtener cámaras:", err);
-          alert("No se pudo acceder a la lista de cámaras.");
-        });
+
+ function iniciarEscaneo() {
+  scanner = new Html5Qrcode("reader");
+  scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    decoded => {
+      console.log("✅ QR decodificado:", decoded);
+      scanner.stop().catch(err => console.error("Error al detener scanner:", err));
+      escanear(decoded);
+    },
+    err => {
+      // Este callback se ejecuta en cada fallo de lectura, sin abortar el stream
+      console.warn("Intento de lectura fallido:", err);
     }
+  )
+  .then(() => {
+    console.log("🎥 Cámara arrancada correctamente");
+  })
+  .catch(err => {
+    console.error("❌ No se pudo iniciar el scanner:", err);
+    alert("Error al iniciar la cámara: " + err.message);
+  });
+}
+  window.addEventListener("DOMContentLoaded", () => {
+    iniciarEscaneo();
 
-    // Listener para detener/reanudar escaneo
     document.getElementById("stop-btn").addEventListener("click", () => {
-      if (scanner && scanner._isScanning) {
+      if (scanner._isScanning) {
         scanner.stop()
           .then(() => document.getElementById("stop-btn").innerText = "Reanudar escaneo")
           .catch(console.error);
@@ -102,7 +102,6 @@
       }
     });
 
-    // Listener para subir imagen de QR
     document.getElementById("input-escanear").addEventListener("change", e => {
       if (!e.target.files.length) return;
       const qrImg = new Html5Qrcode("reader");
@@ -111,11 +110,11 @@
         .catch(() => alert("No se pudo leer el QR."));
     });
 
-    // Listener para ingreso manual de ID
     document.getElementById("btn-manual").addEventListener("click", () => {
       const id = document.getElementById("manual-id").value.trim();
       if (id) escanear(id);
     });
+  });
 
     // Función que maneja el escaneo o entrada manual
     async function escanear(raw) {
@@ -223,7 +222,6 @@
         });
     });
 
-    iniciarEscaneo();
-  });
+  
 </script>
 {% endblock %}
