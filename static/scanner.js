@@ -1,135 +1,137 @@
 // static/scanner.js
 
-// —– Configuración de sonido y elementos HTML —–
-const beep     = new Audio('/static/beep.mp3');
-const videoEl  = document.createElement('video');
-const canvasEl = document.createElement('canvas');
-const ctx      = canvasEl.getContext('2d');
+// Asume que ya has incluido <script src="/static/html5-qrcode.min.js"></script>
+// y tu plantilla tiene un <div id="reader"></div> y un <button id="stop-btn">Detener escaneo</button>
 
-videoEl.autoplay                = true;
-videoEl.muted                   = true;
-videoEl.playsInline             = true;
-videoEl.disablePictureInPicture = true;
-videoEl.style.cssText = `
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  box-sizing: border-box;
-  aspect-ratio: 1/1;
-`;
+const html5QrCode = new Html5Qrcode("reader");
+let ultimoShipId = null;
 
-// oculto el canvas porque sólo lo uso para capturar
-canvasEl.style.display = 'none';
+const qrConfig = {
+  fps: 10,
+  qrbox: { width: 300, height: 300 },
+  aspectRatio: 16 / 9
+};
 
-// lo inserto en el contenedor
-const reader = document.getElementById('reader');
-reader.style.position = 'relative';
-reader.append(videoEl, canvasEl);
-
-let scanning = false;      // evita solapar peticiones
-let finished = false;      // marca que ya escaneamos
-
-// —– Función para arrancar la cámara trasera —–
-async function iniciarCamara() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const back = devices.find(d =>
-    d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
-  );
-  const constraintVideo = back
-    ? { deviceId: { exact: back.deviceId } }
-    : { facingMode: 'environment' };
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
-  });
-  videoEl.srcObject = stream;
-  await videoEl.play();
-}
-
-// —– Función que captura un frame y, si hay QR, llama al backend —–
-async function escanearFrame() {
-  if (finished || scanning || !videoEl.videoWidth) return;
-
-  scanning = true;
-  // preparo el canvas al tamaño real del vídeo
-  canvasEl.width  = videoEl.videoWidth;
-  canvasEl.height = videoEl.videoHeight;
-  ctx.drawImage(videoEl, 0, 0);
-
-  // convierto a blob y envío
-  canvasEl.toBlob(async blob => {
-    try {
-      const form = new FormData();
-      form.append('frame', blob, 'frame.jpg');
-
-      const res = await fetch('/decode-qr', {
-        method: 'POST',
-        body: form,
-        credentials: 'include'
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-
-      if (json.data) {
-        // ¡QR DETECTADO!
-        finished = true;
-
-        // feedback visual
-        videoEl.style.outline = '5px solid lime';
-        setTimeout(() => videoEl.style.outline = '', 500);
-
-        // feedback sonoro
-        beep.play().catch(() => {});
-
-        // tu lógica de negocio: mostramos detalle
-        mostrarDetalle(json.detalle);
-      }
-    } catch (e) {
-      console.error('Error enviando la imagen', e);
-      document.getElementById('error-msg').textContent = 'Error al enviar la imagen';
-    } finally {
-      scanning = false;
+function startScanning() {
+  html5QrCode.start(
+    { facingMode: "environment" },
+    qrConfig,
+    decodedText => {
+      // al detectar un QR con texto, lo paramos y procesamos
+      html5QrCode
+        .stop()
+        .then(() => {
+          document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+          handleDecoded(decodedText);
+        })
+        .catch(console.error);
+    },
+    errorMessage => {
+      // no hacemos nada mientras no haya QR válido
     }
-  }, 'image/jpeg');
+  ).catch(err => console.error("Error arrancando cámara:", err));
 }
 
-// —– Loop de escaneo automático —–
-function startAutoScan() {
-  // cada 500 ms intentamos
-  setInterval(escanearFrame, 500);
-}
-
-// —– Tu función para pintar el detalle en la página —–
-function mostrarDetalle(detalle) {
-  // Ejemplo muy simplificado. Completa según tu HTML:
-  document.getElementById('detalle-pedido').style.display = 'block';
-  document.getElementById('cliente').textContent = detalle.cliente;
-  const tbody = document.getElementById('tabla-items');
-  tbody.innerHTML = detalle.items.map(i => `
-    <tr>
-      <td><img src="${i.imagenes[0].thumbnail}" width="50"></td>
-      <td>${i.titulo}</td>
-      <td>${i.sku}</td>
-      <td>${i.variante}</td>
-      <td>${i.cantidad}</td>
-    </tr>
-  `).join('');
-  document.getElementById('boton-armar').style.display = 'block';
-}
-
-// —– Iniciamos todo al cargar DOM —–
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    await iniciarCamara();
-    startAutoScan();
-  } catch (e) {
-    console.error('No se pudo acceder a la cámara:', e);
-    document.getElementById('error-msg').textContent = 'No se pudo acceder a la cámara';
+function handleDecoded(raw) {
+  // tu función de parseo y petición al back
+  const { order_id, shipment_id } = parseQr(raw);
+  if (!shipment_id) {
+    alert("QR inválido, no contiene shipment_id");
+    return;
   }
+  ultimoShipId = shipment_id;
+  fetch("/escanear", {
+    method: "POST",
+    body: new URLSearchParams({ shipment_id }),
+    credentials: "include"
+  })
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
+    .then(data => {
+      // muestra detalle
+      document.getElementById("cliente").innerText = data.detalle.cliente;
+      const tabla = document.getElementById("tabla-items");
+      tabla.innerHTML = "";
+      data.detalle.items.forEach(item => {
+        const thumb = (item.imagenes?.[0]?.thumbnail) || "https://via.placeholder.com/150";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="text-align:center;padding:0.5rem;border-bottom:1px solid #eee;">
+            <img src="${thumb}" width="80" style="border-radius:4px;">
+          </td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.titulo}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.sku || ""}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.variante || ""}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.cantidad}</td>
+        `;
+        tabla.appendChild(tr);
+      });
+      document.getElementById("detalle-pedido").style.display = "block";
+      document.getElementById("boton-armar").style.display = "inline-block";
+    })
+    .catch(e => {
+      console.error("Error al escanear:", e);
+      alert("No se pudo obtener detalle del pedido");
+    });
+}
 
-  // botón “Detener cámara”
-  document.getElementById('stop-btn').onclick = () => {
-    videoEl.srcObject?.getTracks().forEach(t => t.stop());
-  };
+// extraigo order_id / shipment_id del texto escaneado
+function parseQr(decoded) {
+  let shipment_id = null, order_id = null;
+  decoded = decoded.trim();
+  if (decoded.startsWith("{")) {
+    try {
+      const obj = JSON.parse(decoded);
+      shipment_id = obj.id || obj.shipment_id || null;
+      return { order_id: null, shipment_id };
+    } catch {}
+  }
+  try {
+    const url = new URL(decoded);
+    const parts = url.pathname.split("/").filter(p => p);
+    if (parts[0] === "shipments") shipment_id = parts[1];
+    else if (parts[0] === "orders") order_id = parts[1];
+    return { order_id, shipment_id };
+  } catch {}
+  return { order_id: decoded, shipment_id: null };
+}
+
+// marcar como armado
+function setupArmButton() {
+  document.getElementById("boton-armar").addEventListener("click", () => {
+    if (!ultimoShipId) return alert("No hay shipment para armar");
+    fetch("/armar", {
+      method: "POST",
+      body: new URLSearchParams({ shipment_id: ultimoShipId }),
+      credentials: "include"
+    })
+      .then(r => r.json())
+      .then(resp => {
+        if (resp.success) {
+          alert("Marcado como armado");
+          window.location.reload();
+        } else {
+          alert(resp.error || "Error al marcar armado");
+        }
+      })
+      .catch(err => {
+        console.error("Error /armar:", err);
+        alert("No se pudo marcar armado");
+      });
+  });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  startScanning();
+  setupArmButton();
+
+  document.getElementById("stop-btn").addEventListener("click", () => {
+    if (html5QrCode._isScanning) {
+      html5QrCode.stop().then(() => {
+        document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+      });
+    } else {
+      startScanning();
+      document.getElementById("stop-btn").innerText = "Detener escaneo";
+    }
+  });
 });
