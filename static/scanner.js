@@ -1,8 +1,5 @@
 // static/scanner.js
 
-// Asume que ya has incluido <script src="/static/html5-qrcode.min.js"></script>
-// y tu plantilla tiene un <div id="reader"></div> y un <button id="stop-btn">Detener escaneo</button>
-
 const html5QrCode = new Html5Qrcode("reader");
 let ultimoShipId = null;
 
@@ -12,25 +9,58 @@ const qrConfig = {
   aspectRatio: 16 / 9
 };
 
-function startScanning() {
-  html5QrCode.start(
-    { facingMode: "environment" },
-    qrConfig,
-    decodedText => {
-      // al detectar un QR con texto, lo paramos y procesamos
-      html5QrCode
-        .stop()
-        .then(() => {
-          document.getElementById("stop-btn").innerText = "Reanudar escaneo";
-          handleDecoded(decodedText);
-        })
-        .catch(console.error);
-    },
-    errorMessage => {
-      // no hacemos nada mientras no haya QR válido
+async function iniciarescaneo() {
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (!cameras || !cameras.length) {
+      throw new Error("No se encontró ninguna cámara");
     }
-  ).catch(err => console.error("Error arrancando cámara:", err));
+    // elige la trasera si la hay, o la primera
+    const camera = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[0];
+
+    await html5QrCode.start(
+      camera.id,
+      qrConfig,
+      decodedText => {
+        html5QrCode
+          .stop()
+          .then(() => {
+            document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+            handleDecoded(decodedText);
+          })
+          .catch(console.error);
+      },
+      /* onError */ _ => {
+        // no hacemos nada mientras no haya QR
+      }
+    );
+  } catch (e) {
+    console.error("No pudo arrancar la cámara:", e);
+    document.getElementById("error-msg").innerText = "Error al iniciar la cámara: " + e.message;
+  }
 }
+
+function stopScanning() {
+  html5QrCode.stop().catch(console.error);
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  // Arranca al cargar
+  startScanning();
+
+  document.getElementById("stop-btn").addEventListener("click", () => {
+    if (html5QrCode._isScanning) {
+      stopScanning();
+      document.getElementById("stop-btn").innerText = "Reanudar escaneo";
+    } else {
+      startScanning();
+      document.getElementById("stop-btn").innerText = "Detener escaneo";
+    }
+  });
+});
+
+// ---- el resto de funciones (handleDecoded, parseQr, setupArmButton, etc.) sigue igual ----
+
 
 function handleDecoded(raw) {
   // tu función de parseo y petición al back
