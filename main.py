@@ -162,22 +162,28 @@ async def historial_get(
         },
     )
 @app.post("/decode-qr")
-async def decode_qr(frame: UploadFile = File(...)):
-    content = await frame.read()
-    arr = np.frombuffer(content, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
-    if not data:
-        return JSONResponse({"data": None, "error": "QR no detectado"})
-    # Normalizar payload si vino como JSON
-    shipment_id = None
-    try:
-        obj = json.loads(data)
-        shipment_id = obj.get("id") or obj.get("shipment_id") or data
-    except json.JSONDecodeError:
-        shipment_id = data.strip()
-    detalle = get_order_details(order_id=None, shipment_id=shipment_id)
-    return {"data": shipment_id, "detalle": detalle}
+async def decode_qr(file: UploadFile = File(...)):
+    # 1. Leemos el frame enviado desde el cliente
+    buf = await file.read()
+    qr_data = decode_qr_from_bytes(buf)
+    if not qr_data:
+        # no hay QR en la imagen
+        raise HTTPException(status_code=400, detail="QR no detectado")
+
+    # 2. Interpretamos el contenido del QR como shipment_id u order_id
+    #    por ejemplo: "shipment_id=44938022703" o directamente el número
+    if qr_data.startswith("shipment_id="):
+        shipment_id = qr_data.split("=", 1)[1]
+        detalles = get_order_details(shipment_id=shipment_id)
+    else:
+        detalles = get_order_details(order_id=qr_data)
+
+    # 3. Si get_order_details devolvió error, devolvemos 404
+    if detalles.get("cliente") == "Error" or not detalles.get("items"):
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    # 4. Devolvemos JSON con cliente, items y primer_order_id
+    return JSONResponse(detalles)
 
 # ——— Escanear pedido ———
 
