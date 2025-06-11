@@ -21,6 +21,9 @@ videoEl.style.cssText = `
   object-fit: cover;
 `;
 
+videoEl.style.boxSizing   = 'border-box';
+videoEl.style.aspectRatio = '16/9';
+
 // Ocultamos el canvas (solo lo usamos para captura)
 canvasEl.style.display = 'none';
 
@@ -72,10 +75,13 @@ async function escanearFrame() {
     const json = await res.json();
     console.log('respuesta decode-qr:', json);
 
-    if (json.data) {
-      // aviso visual
-      videoEl.style.border = '5px solid lime';
-      setTimeout(() => videoEl.style.border = '', 500);
+   if (json.data) {
+  // aviso visual sin cambiar tamaño
+  videoEl.style.outline = '5px solid lime';
+  setTimeout(() => videoEl.style.outline = '', 500);
+  // …
+}
+
       // aviso sonoro
       beep.play().catch(() => {});
       // llama a tu lógica de negocio
