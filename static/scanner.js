@@ -1,19 +1,20 @@
 // static/scanner.js
 
-// Sonido de aviso
-const beep = new Audio('/static/beep.mp3');
+// — Elementos y configuraciones —
+const readerEl   = document.getElementById('reader');
+const scanBtn    = document.getElementById('scan-btn');
+const stopBtn    = document.getElementById('stop-btn');
+const errorMsgEl = document.getElementById('error-msg');
 
-// Creamos video y canvas
+// Creamos video + canvas
 const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
-// Configuración vídeo
 videoEl.autoplay                = true;
 videoEl.muted                   = true;
 videoEl.playsInline             = true;
 videoEl.disablePictureInPicture = true;
-videoEl.setAttribute('playsinline','');
 videoEl.style.cssText = `
   display: block;
   width: 100%;
@@ -23,104 +24,102 @@ videoEl.style.cssText = `
   aspect-ratio: 1/1;
 `;
 
-// Canvas oculto
+// ocultar canvas
 canvasEl.style.display = 'none';
 
-// Insertamos en el contenedor
-const container = document.getElementById('reader');
-container.style.position = 'relative';
-container.append(videoEl, canvasEl);
+// añadir al contenedor
+readerEl.style.position = 'relative';
+readerEl.append(videoEl, canvasEl);
 
-// Arranca la cámara tras cargar DOM
+// — Función para iniciar la cámara —
 async function iniciarCamara() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const back = devices.find(d =>
-      d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
-    );
-    const constraintVideo = back
-      ? { deviceId: { exact: back.deviceId } }
-      : { facingMode: 'environment' };
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
-    });
-    videoEl.srcObject = stream;
-    await videoEl.play();
-  } catch (e) {
-    document.getElementById('error-msg').textContent = 'No se pudo iniciar la cámara';
-    console.error(e);
-  }
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const back = devices.find(d =>
+    d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
+  );
+  const constraints = back
+    ? { deviceId: { exact: back.deviceId } }
+    : { facingMode: 'environment' };
+
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { ...constraints, width:{ideal:640}, height:{ideal:480} }
+  });
+  videoEl.srcObject = stream;
+  await videoEl.play();
 }
 
-// Extrae datos del QR de un blob
-async function escanearFrame() {
+// — Función para mostrar en pantalla el detalle recibido —
+function mostrarDetalle(detalle) {
+  // aquí iría tu lógica: poblar tabla, mostrar #detalle-pedido…
+  // por ejemplo:
+  document.getElementById('cliente').textContent = detalle.cliente;
+  const tbody = document.getElementById('tabla-items');
+  tbody.innerHTML = '';
+  detalle.items.forEach(i => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><img src="${i.imagenes[0].thumbnail}" width="50"></td>
+      <td>${i.titulo}</td>
+      <td>${i.sku}</td>
+      <td>${i.variante}</td>
+      <td>${i.cantidad}</td>
+    `;
+    tbody.append(tr);
+  });
+  document.getElementById('detalle-pedido').style.display = 'block';
+}
+
+// — Evento de “Escanear QR” —
+scanBtn.addEventListener('click', () => {
+  errorMsgEl.textContent = '';
   if (!videoEl.videoWidth) {
-    document.getElementById('error-msg').textContent = 'La cámara no está lista';
+    errorMsgEl.textContent = 'La cámara aún no está lista';
     return;
   }
 
+  // dibujar un único frame
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
-  ctx.drawImage(videoEl, 0, 0);
+  ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
 
   canvasEl.toBlob(async blob => {
-  const form = new FormData();
-  // ¡Mira que aquí sea EXACTAMENTE 'frame'!
-  form.append('frame', blob, 'snapshot.jpg');
-  
-  fetch('/decode-qr', {
-    method: 'POST',
-    body: form,
-    credentials: 'include'
-  })
-  .then(res => res.json())
-  .then(json => {
-    if (json.error) {
-      errorMsgEl.textContent = json.error;
-    } else {
-      // pintar borde verde, mostrar detalle…
-    }
-  })
-  .catch(err => {
-    console.error(err);
-    errorMsgEl.textContent = 'Error enviando la imagen';
-  });
+    const form = new FormData();
+    form.append('frame', blob, 'snapshot.jpg'); // ¡CAMPO 'frame'!
 
+    try {
+      const res = await fetch('/decode-qr', {
+        method: 'POST',
+        body: form,
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
 
-    const json = await res.json();
-
-    if (json.error || !json.data) {
-      // QR no detectado o inválido
-      document.getElementById('error-msg').textContent = json.error || 'QR no detectado';
-      videoEl.style.outline = '5px solid crimson';
-      setTimeout(() => videoEl.style.outline = '', 500);
-      return;
-    }
-
-    // QR ok!
-    document.getElementById('error-msg').textContent = '';
-    videoEl.style.outline = '5px solid lime';
-    setTimeout(() => videoEl.style.outline = '', 500);
-
-    // Sonido
-    beep.play().catch(() => {});
-
-    // Renderiza detalle (tendrás que implementar mostrarDetalle)
-    mostrarDetalle(json.detalle);
-  }, 'image/jpeg');
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  iniciarCamara();
-
-  document.getElementById('scan-btn').onclick = () => {
-    escanearFrame().catch(e => {
-      document.getElementById('error-msg').textContent = 'Error inesperado';
+      if (json.error || !json.data) {
+        errorMsgEl.textContent = json.error || 'QR no detectado';
+        videoEl.style.outline = '5px solid crimson';
+        setTimeout(() => videoEl.style.outline = '', 500);
+      } else {
+        videoEl.style.outline = '5px solid lime';
+        setTimeout(() => videoEl.style.outline = '', 500);
+        mostrarDetalle(json.detalle);
+      }
+    } catch (e) {
       console.error(e);
-    });
-  };
+      errorMsgEl.textContent = 'Error enviando la imagen';
+    }
+  }, 'image/jpeg');
+});
 
-  document.getElementById('stop-btn').onclick = () => {
-    videoEl.srcObject?.getTracks().forEach(t => t.stop());
-  };
+// — Evento “Detener cámara” —
+stopBtn.addEventListener('click', () => {
+  videoEl.srcObject?.getTracks().forEach(t => t.stop());
+});
+
+// — Al cargar DOM, arrancar la cámara —
+document.addEventListener('DOMContentLoaded', () => {
+  iniciarCamara().catch(e => {
+    console.error('Cámara:', e);
+    errorMsgEl.textContent = 'No fue posible acceder a la cámara';
+  });
 });
