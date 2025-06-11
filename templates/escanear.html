@@ -58,123 +58,107 @@
 </main>
 {% endblock %}
 {% block scripts %}
-<script src="/static/html5-qrcode.min.js"></script>
+<script src="/static/scanner.js"></script>
 <script>
-  let scanner;
   let ultimoShipId = "";
 
-  async function iniciarEscaneo() {
-    if (!navigator.mediaDevices?.getUserMedia) return console.error('getUserMedia no soportado');
-
-    let source;
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter(d=>d.kind==='videoinput');
-      const back = videoInputs.find(d=>/back|rear|environment/i.test(d.label));
-      source = back ? { deviceId:{ exact: back.deviceId } } : { facingMode:'environment' };
-    } catch {
-      source = { facingMode:'environment' };
-    }
-
-    const constraints = { video:{ ...source, width:{ ideal:640 }, height:{ ideal:480 } } };
-
-    scanner = new Html5Qrcode('reader');
-    scanner.start(
-      constraints,
-      { fps:10, qrbox:250, rememberLastUsedCamera:true },
-      decoded => {
-        scanner.stop().catch(()=>{});
-        escanear(decoded);
-      },
-      ()=>{}
-    )
-    .then(()=>console.log('Cámara iniciada'))
-    .catch(err=>{
-      console.error('No arrancó cámara:', err.name, err.message);
-      if(err.name==='OverconstrainedError') iniciarEscaneo();
-      if(err.name==='NotAllowedError') alert('Permiso denegado. Activa cámara en ajustes.');
-    });
-  }
-
-  window.addEventListener('DOMContentLoaded',()=>{
-    iniciarEscaneo();
-
-    document.getElementById('stop-btn').addEventListener('click',()=>{
-      if(scanner?._isScanning){
-        scanner.stop().then(()=>document.getElementById('stop-btn').innerText='Reanudar escaneo');
-      } else {
-        iniciarEscaneo();
-        document.getElementById('stop-btn').innerText='Detener escaneo';
-      }
-    });
-
-    document.getElementById('input-escanear').addEventListener('change',e=>{
-      if(!e.target.files.length) return;
-      const imgScanner = new Html5Qrcode('reader');
-      imgScanner.scanFile(e.target.files[0],true)
-        .then(decoded=>{ imgScanner.clear(); escanear(decoded); })
-        .catch(()=>alert('No se pudo leer el QR.'));
-    });
-
-    document.getElementById('btn-manual').addEventListener('click',()=>{
-      const id=document.getElementById('manual-id').value.trim();
-      if(id) escanear(id);
-    });
-
-    document.getElementById('boton-armar').addEventListener('click',()=>{
-      if(!ultimoShipId) return alert('No hay shipment_id válido.');
-      const f=new FormData(); f.append('shipment_id',ultimoShipId);
-      fetch('/armar',{ method:'POST', body:f, credentials:'include' })
-        .then(r=>r.json())
-        .then(r=>{ if(r.success) window.location.reload(); else alert(r.error); })
-        .catch(()=>alert('Error al marcar armado'));
-    });
-  });
-
-  async function escanear(raw){
+  async function escanear(raw) {
     const { order_id, shipment_id } = parseQr(raw);
-    ultimoShipId = shipment_id || '';
-    if(!shipment_id) return alert('QR sin shipment_id válido.');
-    const f=new FormData(); f.append('shipment_id',shipment_id);
+    ultimoShipId = shipment_id || "";
+    if (!shipment_id) return alert("QR sin shipment_id válido.");
+    const f = new FormData(); f.append("shipment_id", shipment_id);
     try {
-      const r=await fetch('/escanear',{ method:'POST', body:f, credentials:'include' });
-      if(!r.ok) return alert('('+r.status+') '+await r.text());
-      const d=await r.json();
-      document.getElementById('cliente').innerText=d.detalle.cliente;
-      const t=document.getElementById('tabla-items'); t.innerHTML='';
-      d.detalle.items.forEach(item=>{
-        const img=(item.imagenes?.[0]?.thumbnail)||'https://via.placeholder.com/150';
-        const tr=document.createElement('tr');
-        tr.innerHTML=`
+      const r = await fetch("/escanear", {
+        method: "POST",
+        body: f,
+        credentials: "include"
+      });
+      if (!r.ok) return alert("(" + r.status + ") " + await r.text());
+      const d = await r.json();
+      document.getElementById("cliente").innerText = d.detalle.cliente;
+      const t = document.getElementById("tabla-items"); t.innerHTML = "";
+      d.detalle.items.forEach(item => {
+        const img = (item.imagenes?.[0]?.thumbnail) 
+                      || "https://via.placeholder.com/150";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
           <td style="text-align:center;padding:0.5rem;border-bottom:1px solid #eee;">
             <img src="${img}" width="80" style="border-radius:4px;">
           </td>
           <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.titulo}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.sku||''}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.variante||''}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.cantidad}</td>`;
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.sku||""}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.variante||""}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.cantidad}</td>
+        `;
         t.appendChild(tr);
       });
-      document.getElementById('detalle-pedido').style.display='block';
-      document.getElementById('boton-armar').style.display='inline-block';
+      document.getElementById("detalle-pedido").style.display = "block";
+      document.getElementById("boton-armar").style.display = "inline-block";
     } catch {
-      alert('Error al obtener detalles del pedido.');
+      alert("Error al obtener detalles del pedido.");
     }
   }
 
-  function parseQr(s){
-    let order_id=null, shipment_id=null;
-    if(s.trim().startsWith('{')){
-      try{ const p=JSON.parse(s); if(p.id) return { order_id:null, shipment_id:p.id }; }catch{}
+  function parseQr(s) {
+    let order_id = null, shipment_id = null;
+    if (s.trim().startsWith("{")) {
+      try {
+        const p = JSON.parse(s);
+        if (p.id) return { order_id: null, shipment_id: p.id };
+      } catch {}
     }
-    try{
-      const u=new URL(s);
-      const p=u.pathname.split('/').filter(x=>x);
-      if(p[0]==='shipments') shipment_id=p[1]||null;
-      if(p[0]==='orders') order_id=p[1]||null;
+    try {
+      const u = new URL(s);
+      const p = u.pathname.split("/").filter(x=>x);
+      if (p[0] === "shipments")   shipment_id = p[1] || null;
+      if (p[0] === "orders")      order_id    = p[1] || null;
       return { order_id, shipment_id };
-    }catch{}
-    return { order_id:s.trim(), shipment_id:null };
+    } catch {}
+    return { order_id: s.trim(), shipment_id: null };
   }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    // Subir imagen de QR
+    document.getElementById("input-escanear")
+      .addEventListener("change", async e => {
+        if (!e.target.files.length) return;
+        const blob = e.target.files[0];
+        const form = new FormData(); form.append("frame", blob, blob.name);
+        const res = await fetch("/decode-qr", {
+          method: "POST",
+          body: form,
+          credentials: "include"
+        });
+        const json = await res.json();
+        if (json.data) escanear(json.data);
+        else alert("No se pudo leer el QR.");
+      });
+
+    // Ingreso manual
+    document.getElementById("btn-manual")
+      .addEventListener("click", () => {
+        const id = document.getElementById("manual-id").value.trim();
+        if (id) escanear(id);
+      });
+
+    // Marcar armado
+    document.getElementById("boton-armar")
+      .addEventListener("click", async () => {
+        if (!ultimoShipId) return alert("No hay shipment_id válido.");
+        const f = new FormData(); f.append("shipment_id", ultimoShipId);
+        try {
+          const r = await fetch("/armar", {
+            method: "POST",
+            body: f,
+            credentials: "include"
+          });
+          const j = await r.json();
+          if (j.success) window.location.reload();
+          else alert(j.error);
+        } catch {
+          alert("Error al marcar armado");
+        }
+      });
+  });
 </script>
 {% endblock %}
