@@ -1,10 +1,21 @@
 // static/scanner.js
+
+// Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
+
+// Elementos de vídeo y canvas
 const videoEl  = document.createElement('video');
-videoEl.autoplay     = true;
-videoEl.playsInline   = true;
-videoEl.muted        = true;
-videoEl.disablePictureInPicture = true;
+const canvasEl = document.createElement('canvas');
+const ctx      = canvasEl.getContext('2d');
+// Preview de debug
+const preview  = document.createElement('img');
+
+// Configuración del vídeo para inline y sin PiP
+videoEl.autoplay                      = true;
+videoEl.muted                         = true;
+videoEl.playsInline                   = true;
+videoEl.disablePictureInPicture       = true;
+videoEl.disableRemotePlayback         = true;
 videoEl.setAttribute('playsinline', '');
 videoEl.setAttribute('webkit-playsinline', '');
 videoEl.style.cssText = `
@@ -14,6 +25,7 @@ videoEl.style.cssText = `
   object-fit: cover;
 `;
 
+// Ocultamos el canvas, mantenemos preview para debug
 canvasEl.style.display = 'none';
 preview.style.cssText = `
   position: absolute;
@@ -22,16 +34,22 @@ preview.style.cssText = `
   border: 2px solid red;
   z-index: 9999;
 `;
-document.getElementById('reader').append(videoEl, canvasEl, preview);
+
+// Montamos todo en el contenedor #reader
+const container = document.getElementById('reader');
+container.style.position = 'relative';
+container.append(videoEl, canvasEl, preview);
 
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const back = devices.find(d => d.kind==='videoinput' && /back|rear|environment/i.test(d.label));
+  const back = devices.find(d =>
+    d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
+  );
   const constraintVideo = back
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
+    video: { ...constraintVideo, width: { ideal: 640 }, height: { ideal: 480 } }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
@@ -39,34 +57,45 @@ async function iniciarCamara() {
 
 async function escanearFrame() {
   if (!videoEl.videoWidth) return;
-  // dibujar
+
+  // Captura de frame
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
   ctx.drawImage(videoEl, 0, 0);
-  // debug: mostrar miniatura
+
+  // Debug: muestra miniatura
   preview.src = canvasEl.toDataURL('image/jpeg', 0.3);
 
-  // enviar al servidor
+  // Envío al servidor
   canvasEl.toBlob(async blob => {
     const form = new FormData();
     form.append('frame', blob, 'frame.jpg');
     console.log('enviando frame...', blob);
+
     const res = await fetch('/decode-qr', {
-      method: 'POST', body: form, credentials: 'include'
+      method: 'POST',
+      body: form,
+      credentials: 'include'
     });
+
     if (!res.ok) {
       console.warn('HTTP', res.status);
       return;
     }
+
     const json = await res.json();
     console.log('respuesta decode-qr:', json);
+
     if (json.data) {
-  // aviso visual:
-  videoEl.style.border = '5px solid lime';
-  setTimeout(()=> videoEl.style.border = '', 500);
-  // aviso sonoro:
-  beep.play().catch(()=>{});
-  escanear(json.data);
+      // aviso visual
+      videoEl.style.border = '5px solid lime';
+      setTimeout(() => videoEl.style.border = '', 500);
+      // aviso sonoro
+      beep.play().catch(() => {});
+      // llama a tu lógica de negocio
+      escanear(json.data);
+    }
+  }, 'image/jpeg');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
