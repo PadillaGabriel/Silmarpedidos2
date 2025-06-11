@@ -64,20 +64,28 @@ async function escanearFrame() {
   ctx.drawImage(videoEl, 0, 0);
 
   canvasEl.toBlob(async blob => {
-    const form = new FormData();
-    form.append('frame', blob, 'frame.jpg');
-
-    const res = await fetch('/decode-qr', {
-      method: 'POST',
-      body: form,
-      credentials: 'include'
-    });
-
-    if (!res.ok) {
-      document.getElementById('error-msg').textContent = 'Error al procesar imagen';
-      console.warn('HTTP', res.status);
-      return;
+  const form = new FormData();
+  // ¡Mira que aquí sea EXACTAMENTE 'frame'!
+  form.append('frame', blob, 'snapshot.jpg');
+  
+  fetch('/decode-qr', {
+    method: 'POST',
+    body: form,
+    credentials: 'include'
+  })
+  .then(res => res.json())
+  .then(json => {
+    if (json.error) {
+      errorMsgEl.textContent = json.error;
+    } else {
+      // pintar borde verde, mostrar detalle…
     }
+  })
+  .catch(err => {
+    console.error(err);
+    errorMsgEl.textContent = 'Error enviando la imagen';
+  });
+
 
     const json = await res.json();
 
