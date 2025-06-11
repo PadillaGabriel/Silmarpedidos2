@@ -1,171 +1,110 @@
-// static/scanner.js
-
-// — Sonido de aviso —
+// Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
 
-// — Vídeo & canvas para capturar frames —
+// Vídeo y canvas
 const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
-// — Estilos y atributos del vídeo —
-Object.assign(videoEl, {
-  autoplay: true,
-  muted: true,
-  playsInline: true,
-  disablePictureInPicture: true,
-  disableRemotePlayback: true,
-});
-videoEl.setAttribute('webkit-playsinline', '');
+// Estilos del vídeo
+videoEl.autoplay                = true;
+videoEl.muted                   = true;
+videoEl.playsInline             = true;
+videoEl.disablePictureInPicture = true;
+videoEl.disableRemotePlayback   = true;
+videoEl.setAttribute('playsinline','');
+videoEl.setAttribute('webkit-playsinline','');
 videoEl.style.cssText = `
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   box-sizing: border-box;
-  aspect-ratio: 1/1;
+  aspect-ratio: 16/9;
 `;
 
-// ocultamos el canvas (solo sirve para capturar imagen)
+// Canvas oculto
 canvasEl.style.display = 'none';
 
-// insertamos en el contenedor #reader
+// Montamos en el contenedor
 const container = document.getElementById('reader');
 container.style.position = 'relative';
 container.append(videoEl, canvasEl);
 
-let scanInterval;
+// Estado
+let streaming = true;
 
-// — Inicializa la cámara (elige trasera si hay) —
+// Inicia la cámara tras cargar
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const back = devices.find(d =>
-    d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
-  );
-  const constraints = back
+  const back = devices.find(d => d.kind==='videoinput' && /back|rear|environment/i.test(d.label));
+  const constraintVideo = back
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
 
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraints, width: { ideal: 640 }, height: { ideal: 480 } }
+    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
 }
 
-// — Envía un frame al servidor para decodificar el QR —
+// Detiene la cámara
+function detenerCamara() {
+  streaming = false;
+  videoEl.srcObject?.getTracks().forEach(t => t.stop());
+}
+
+// Escanea un solo frame
 async function escanearFrame() {
-  if (!videoEl.videoWidth) return;
+  clearError();
+  if (!streaming || !videoEl.videoWidth) return showError('La cámara no está lista');
 
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
   ctx.drawImage(videoEl, 0, 0);
 
-  canvasEl.toBlob(async blob => {
-    const form = new FormData();
-    form.append('frame', blob, 'frame.jpg');
+  return new Promise(resolve => {
+    canvasEl.toBlob(async blob => {
+      const form = new FormData();
+      form.append('frame', blob, 'frame.jpg');
+      try {
+        const res  = await fetch('/decode-qr', { method:'POST', body:form, credentials:'include' });
+        if (!res.ok) return showError(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.error) return showError(json.error);
 
-    try {
-      const res = await fetch('/decode-qr', {
-        method: 'POST',
-        body: form,
-        credentials: 'include'
-      });
-      if (!res.ok) return;
-      const json = await res.json();
-      console.log('decode-qr:', json);
-
-      if (json.error) {
-        // mostramos error al usuario
-        alert(json.error);
-        return;
-      }
-
-      if (json.data && json.data.shipment_id) {
-        // efecto visual
+        // Éxito: dibujamos outline, sonido y llamada a tu lógica
         videoEl.style.outline = '5px solid lime';
         setTimeout(() => videoEl.style.outline = '', 500);
-        // sonido
-        beep.play().catch(() => {});
-        // llamamos a tu lógica con el shipment_id
+        beep.play().catch(()=>{});
         escanear(json.data.shipment_id);
-        detenerEscaneo();
+        detenerCamara();
+      } catch(e) {
+        showError('Error interno');
+        console.error(e);
       }
-    } catch (e) {
-      console.error('decode-qr error:', e);
-    }
-  }, 'image/jpeg');
-}
-
-
-// — Detiene el escaneo (parar intervalos y cámara) —
-function detenerEscaneo() {
-  clearInterval(scanInterval);
-  videoEl.srcObject?.getTracks().forEach(t => t.stop());
-  document.getElementById('stop-btn').disabled = true;
-}
-
-// — Lógica para manejar el ID encontrado o ingresado —
-async function escanear(id) {
-  // Ejemplo: llama a tu endpoint que devuelve detalle de pedido
-  const res = await fetch(`/api/pedidos/${id}`, { credentials: 'include' });
-  if (!res.ok) return;
-  const data = await res.json();
-  mostrarDetalle(data);
-}
-
-// — Muestra el detalle en el DOM —
-function mostrarDetalle(data) {
-  document.getElementById('cliente').textContent = data.cliente;
-  const tbody = document.getElementById('tabla-items');
-  tbody.innerHTML = '';
-  data.items.forEach(item => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><img src="${item.imagen}" width="50"></td>
-      <td>${item.titulo}</td>
-      <td>${item.sku}</td>
-      <td>${item.variante}</td>
-      <td>${item.cantidad}</td>
-    `;
-    tbody.append(tr);
+      resolve();
+    }, 'image/jpeg');
   });
-  document.getElementById('detalle-pedido').style.display = 'block';
-  document.getElementById('boton-armar').style.display = 'block';
 }
 
-// — Al cargar la página —
+function showError(msg) {
+  document.getElementById('error-msg').innerText = msg;
+}
+function clearError() {
+  document.getElementById('error-msg').innerText = '';
+}
+
+// Arranque al cargar la página
 document.addEventListener('DOMContentLoaded', () => {
-  // arrancamos la cámara y el intervalo
-  iniciarCamara().catch(e => console.error('Cámara:', e));
-  scanInterval = setInterval(escanearFrame, 800);
+  iniciarCamara().catch(e => showError('No se pudo acceder a la cámara'));
 
-  // botón detener
-  const stopBtn = document.getElementById('stop-btn');
-  stopBtn.onclick = detenerEscaneo;
+  document.getElementById('scan-btn')
+    .addEventListener('click', () => escanearFrame());
 
-  // subir imagen de QR
-  document.getElementById('input-escanear').onchange = async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const form = new FormData();
-    form.append('frame', file, file.name);
-    try {
-      const res = await fetch('/decode-qr', {
-        method: 'POST',
-        body: form,
-        credentials: 'include'
-      });
-      const json = await res.json();
-      if (json.data) escanear(json.data);
-    } catch (err) {
-      console.error('decode-qr imagen:', err);
-    }
-  };
+  document.getElementById('stop-btn')
+    .addEventListener('click', detenerCamara);
 
-  // ingreso manual de ID
-  document.getElementById('btn-manual').onclick = () => {
-    const id = document.getElementById('manual-id').value.trim();
-    if (id) escanear(id);
-  };
+  // Aquí enlazas tu input file y búsqueda manual…
 });
