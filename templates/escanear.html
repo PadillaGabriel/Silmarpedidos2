@@ -7,9 +7,14 @@
       <h2>Escanear Pedido</h2>
 
       <div id="reader" style="width:100%; max-width:400px; height:300px; margin:1rem auto;"></div>
-      <button id="stop-btn" class="btn btn-primary" style="display:block; margin:0 auto;">
-        Detener escaneo
+      <button id="scan-btn" class="btn btn-success" style="display:block; margin:1rem auto;">
+        Escanear QR
       </button>
+      <button id="stop-btn" class="btn btn-secondary" style="display:block; margin:0.5rem auto;">
+        Detener cámara
+      </button>
+      <div id="error-msg" style="color:crimson; text-align:center; margin-top:1rem;"></div>
+
       <hr style="margin:2rem 0;">
 
       <p><strong>O subí una imagen de QR:</strong></p>
@@ -17,12 +22,8 @@
 
       <p><strong>O ingresá el ID manualmente:</strong></p>
       <div style="display:flex; align-items:center;">
-        <input
-          type="text"
-          id="manual-id"
-          placeholder="Ingresar ID de pedido"
-          style="flex:1; padding:0.5rem; border:1px solid #ccc; border-radius:4px;"
-        >
+        <input type="text" id="manual-id" placeholder="Ingresar ID de pedido"
+               style="flex:1; padding:0.5rem; border:1px solid #ccc; border-radius:4px;">
         <button class="btn btn-primary" id="btn-manual" style="margin-left:1rem;">
           Buscar
         </button>
@@ -30,135 +31,13 @@
     </div>
   </div>
 
+  <!-- Detalle pedido como antes -->
   <div id="detalle-pedido" class="card" style="display:none; margin-top:2rem;">
-    <div class="card-body">
-      <h3>Detalle del Pedido</h3>
-      <p><strong>Cliente:</strong> <span id="cliente"></span></p>
-      <table style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th style="text-align:left; padding:0.5rem; border-bottom:1px solid #ccc;">Imagen</th>
-            <th style="text-align:left; padding:0.5rem; border-bottom:1px solid #ccc;">Título</th>
-            <th style="text-align:left; padding:0.5rem; border-bottom:1px solid #ccc;">SKU</th>
-            <th style="text-align:left; padding:0.5rem; border-bottom:1px solid #ccc;">Variante</th>
-            <th style="text-align:left; padding:0.5rem; border-bottom:1px solid #ccc;">Cantidad</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-items"></tbody>
-      </table>
-
-      <div style="text-align:center; margin-top:1rem;">
-        <button id="boton-armar" class="btn btn-primary" style="display:none; width:100%;">
-          Marcar como armado
-        </button>
-      </div>
-      <div id="message-armar" class="mt-2"></div>
-    </div>
+    <!-- ... -->
   </div>
 </main>
 {% endblock %}
 {% block scripts %}
 <script src="/static/scanner.js"></script>
-<script>
-  let ultimoShipId = "";
 
-  async function escanear(raw) {
-    const { order_id, shipment_id } = parseQr(raw);
-    ultimoShipId = shipment_id || "";
-    if (!shipment_id) return alert("QR sin shipment_id válido.");
-    const f = new FormData(); f.append("shipment_id", shipment_id);
-    try {
-      const r = await fetch("/escanear", {
-        method: "POST",
-        body: f,
-        credentials: "include"
-      });
-      if (!r.ok) return alert("(" + r.status + ") " + await r.text());
-      const d = await r.json();
-      document.getElementById("cliente").innerText = d.detalle.cliente;
-      const t = document.getElementById("tabla-items"); t.innerHTML = "";
-      d.detalle.items.forEach(item => {
-        const img = (item.imagenes?.[0]?.thumbnail) 
-                      || "https://via.placeholder.com/150";
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td style="text-align:center;padding:0.5rem;border-bottom:1px solid #eee;">
-            <img src="${img}" width="80" style="border-radius:4px;">
-          </td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.titulo}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.sku||""}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.variante||""}</td>
-          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.cantidad}</td>
-        `;
-        t.appendChild(tr);
-      });
-      document.getElementById("detalle-pedido").style.display = "block";
-      document.getElementById("boton-armar").style.display = "inline-block";
-    } catch {
-      alert("Error al obtener detalles del pedido.");
-    }
-  }
-
-  function parseQr(s) {
-    let order_id = null, shipment_id = null;
-    if (s.trim().startsWith("{")) {
-      try {
-        const p = JSON.parse(s);
-        if (p.id) return { order_id: null, shipment_id: p.id };
-      } catch {}
-    }
-    try {
-      const u = new URL(s);
-      const p = u.pathname.split("/").filter(x=>x);
-      if (p[0] === "shipments")   shipment_id = p[1] || null;
-      if (p[0] === "orders")      order_id    = p[1] || null;
-      return { order_id, shipment_id };
-    } catch {}
-    return { order_id: s.trim(), shipment_id: null };
-  }
-
-  window.addEventListener("DOMContentLoaded", () => {
-    // Subir imagen de QR
-    document.getElementById("input-escanear")
-      .addEventListener("change", async e => {
-        if (!e.target.files.length) return;
-        const blob = e.target.files[0];
-        const form = new FormData(); form.append("frame", blob, blob.name);
-        const res = await fetch("/decode-qr", {
-          method: "POST",
-          body: form,
-          credentials: "include"
-        });
-        const json = await res.json();
-        if (json.data) escanear(json.data);
-        else alert("No se pudo leer el QR.");
-      });
-
-    // Ingreso manual
-    document.getElementById("btn-manual")
-      .addEventListener("click", () => {
-        const id = document.getElementById("manual-id").value.trim();
-        if (id) escanear(id);
-      });
-
-    // Marcar armado
-    document.getElementById("boton-armar")
-      .addEventListener("click", async () => {
-        if (!ultimoShipId) return alert("No hay shipment_id válido.");
-        const f = new FormData(); f.append("shipment_id", ultimoShipId);
-        try {
-          const r = await fetch("/armar", {
-            method: "POST",
-            body: f,
-            credentials: "include"
-          });
-          const j = await r.json();
-          if (j.success) window.location.reload();
-          else alert(j.error);
-        } catch {
-          alert("Error al marcar armado");
-        }
-      });
-  });
-</script>
 {% endblock %}
