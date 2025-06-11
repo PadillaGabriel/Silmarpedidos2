@@ -1,20 +1,19 @@
 // static/scanner.js
-
+const beep = new Audio('/static/beep.mp3');
 const videoEl  = document.createElement('video');
-const canvasEl = document.createElement('canvas');
-const ctx      = canvasEl.getContext('2d');
-const preview  = document.createElement('img');  // para debug
-
-// configuración vídeo
-videoEl.autoplay      = true;
-videoEl.muted         = true;
+videoEl.autoplay     = true;
 videoEl.playsInline   = true;
+videoEl.muted        = true;
+videoEl.disablePictureInPicture = true;
+videoEl.setAttribute('playsinline', '');
+videoEl.setAttribute('webkit-playsinline', '');
 videoEl.style.cssText = `
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 `;
+
 canvasEl.style.display = 'none';
 preview.style.cssText = `
   position: absolute;
@@ -61,8 +60,13 @@ async function escanearFrame() {
     }
     const json = await res.json();
     console.log('respuesta decode-qr:', json);
-    if (json.data) escanear(json.data);
-  }, 'image/jpeg');
+    if (json.data) {
+  // aviso visual:
+  videoEl.style.border = '5px solid lime';
+  setTimeout(()=> videoEl.style.border = '', 500);
+  // aviso sonoro:
+  beep.play().catch(()=>{});
+  escanear(json.data);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
