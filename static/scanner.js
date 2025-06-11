@@ -25,7 +25,7 @@ videoEl.style.cssText = `
   height: 100%;
   object-fit: cover;
   box-sizing: border-box;
-  aspect-ratio: 16/9;
+  aspect-ratio: 1/1;
 `;
 
 // Ocultamos el canvas (solo lo usamos para captura)
