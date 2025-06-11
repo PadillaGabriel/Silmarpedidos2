@@ -1,5 +1,3 @@
-// static/scanner.js
-
 // Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
 
@@ -7,17 +5,15 @@ const beep = new Audio('/static/beep.mp3');
 const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
-// Preview de debug
-const preview  = document.createElement('img');
 
 // Configuración del vídeo para inline y sin PiP
-videoEl.autoplay                      = true;
-videoEl.muted                         = true;
-videoEl.playsInline                   = true;
-videoEl.disablePictureInPicture       = true;
-videoEl.disableRemotePlayback         = true;
-videoEl.setAttribute('playsinline', '');
-videoEl.setAttribute('webkit-playsinline', '');
+videoEl.autoplay                  = true;
+videoEl.muted                     = true;
+videoEl.playsInline               = true;
+videoEl.disablePictureInPicture   = true;
+videoEl.disableRemotePlayback     = true;
+videoEl.setAttribute('playsinline','');
+videoEl.setAttribute('webkit-playsinline','');
 videoEl.style.cssText = `
   display: block;
   width: 100%;
@@ -25,20 +21,13 @@ videoEl.style.cssText = `
   object-fit: cover;
 `;
 
-// Ocultamos el canvas, mantenemos preview para debug
+// Ocultamos el canvas (solo lo usamos para captura)
 canvasEl.style.display = 'none';
-preview.style.cssText = `
-  position: absolute;
-  top: 0; right: 0;
-  width: 80px; height: 60px;
-  border: 2px solid red;
-  z-index: 9999;
-`;
 
-// Montamos todo en el contenedor #reader
+// Insertamos ambos en #reader
 const container = document.getElementById('reader');
 container.style.position = 'relative';
-container.append(videoEl, canvasEl, preview);
+container.append(videoEl, canvasEl);
 
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
@@ -49,7 +38,7 @@ async function iniciarCamara() {
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width: { ideal: 640 }, height: { ideal: 480 } }
+    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
@@ -62,9 +51,6 @@ async function escanearFrame() {
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
   ctx.drawImage(videoEl, 0, 0);
-
-  // Debug: muestra miniatura
-  preview.src = canvasEl.toDataURL('image/jpeg', 0.3);
 
   // Envío al servidor
   canvasEl.toBlob(async blob => {
