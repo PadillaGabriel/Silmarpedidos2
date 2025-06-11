@@ -160,22 +160,23 @@ async def historial_get(
             "filtro_logistica": logistica or "",
         },
     )
-
 @app.post("/decode-qr")
 async def decode_qr(frame: UploadFile = File(...)):
-    # 1) Leer bytes de la imagen
     content = await frame.read()
     arr = np.frombuffer(content, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    # 2) Detectar y decodificar QR
-    detector = cv2.QRCodeDetector()
-    data, points, _ = detector.detectAndDecode(img)
+    data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
     if not data:
         return JSONResponse({"data": None, "error": "QR no detectado"})
-    # 3) Llamar a tu lógica de ML
-    #    get_order_details acepta order_id o shipment_id
-    detalle = get_order_details(order_id=None, shipment_id=data)
-    return {"data": data, "detalle": detalle}
+    # Normalizar payload si vino como JSON
+    shipment_id = None
+    try:
+        obj = json.loads(data)
+        shipment_id = obj.get("id") or obj.get("shipment_id") or data
+    except json.JSONDecodeError:
+        shipment_id = data.strip()
+    detalle = get_order_details(order_id=None, shipment_id=shipment_id)
+    return {"data": shipment_id, "detalle": detalle}
 
 # ——— Escanear pedido ———
 
