@@ -1,3 +1,9 @@
+<!-- Asegúrate de tener estos botones en tu HTML -->
+<button id="start-btn">▶️ Iniciar escaneo</button>
+<button id="stop-btn" disabled>■ Detener escaneo</button>
+<div id="reader"></div>
+
+<script>
 // Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
 
@@ -7,11 +13,11 @@ const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
 // Configuración del vídeo para inline y sin PiP
-videoEl.autoplay                  = true;
-videoEl.muted                     = true;
-videoEl.playsInline               = true;
-videoEl.disablePictureInPicture   = true;
-videoEl.disableRemotePlayback     = true;
+videoEl.autoplay                = true;
+videoEl.muted                   = true;
+videoEl.playsInline             = true;
+videoEl.disablePictureInPicture = true;
+videoEl.disableRemotePlayback   = true;
 videoEl.setAttribute('playsinline','');
 videoEl.setAttribute('webkit-playsinline','');
 videoEl.style.cssText = `
@@ -19,10 +25,9 @@ videoEl.style.cssText = `
   width: 100%;
   height: 100%;
   object-fit: cover;
+  box-sizing: border-box;
+  aspect-ratio: 16/9;
 `;
-
-videoEl.style.boxSizing   = 'border-box';
-videoEl.style.aspectRatio = '16/9';
 
 // Ocultamos el canvas (solo lo usamos para captura)
 canvasEl.style.display = 'none';
@@ -32,16 +37,11 @@ const container = document.getElementById('reader');
 container.style.position = 'relative';
 container.append(videoEl, canvasEl);
 
+let escanearInterval = null;
+
 async function iniciarCamara() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const back = devices.find(d =>
-    d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
-  );
-  const constraintVideo = back
-    ? { deviceId: { exact: back.deviceId } }
-    : { facingMode: 'environment' };
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
+    video: { facingMode: 'environment', width:{ideal:640}, height:{ideal:480} }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
@@ -49,52 +49,55 @@ async function iniciarCamara() {
 
 async function escanearFrame() {
   if (!videoEl.videoWidth) return;
-
-  // Captura de frame
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
   ctx.drawImage(videoEl, 0, 0);
-
-  // Envío al servidor
   canvasEl.toBlob(async blob => {
     const form = new FormData();
     form.append('frame', blob, 'frame.jpg');
-    console.log('enviando frame...', blob);
-
-    const res = await fetch('/decode-qr', {
-      method: 'POST',
-      body: form,
-      credentials: 'include'
-    });
-
-    if (!res.ok) {
-      console.warn('HTTP', res.status);
-      return;
-    }
-
-    const json = await res.json();
-    console.log('respuesta decode-qr:', json);
-
-   if (json.data) {
-  // aviso visual sin cambiar tamaño
-  videoEl.style.outline = '5px solid lime';
-  setTimeout(() => videoEl.style.outline = '', 500);
-  // …
-}
-
-      // aviso sonoro
-      beep.play().catch(() => {});
-      // llama a tu lógica de negocio
-      escanear(json.data);
+    try {
+      const res = await fetch('/decode-qr', {
+        method: 'POST',
+        body: form,
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.data) {
+        // aviso visual
+        videoEl.style.outline = '5px solid lime';
+        setTimeout(() => videoEl.style.outline = '', 500);
+        // aviso sonoro
+        beep.play().catch(() => {});
+        // tu lógica de negocio
+        escanear(json.data);
+      }
+    } catch (e) {
+      console.warn('Error decode-qr:', e);
     }
   }, 'image/jpeg');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  iniciarCamara().catch(e => console.error('Cámara:', e));
-  setInterval(escanearFrame, 800);
-
-  document.getElementById('stop-btn').onclick = () => {
-    videoEl.srcObject?.getTracks().forEach(t => t.stop());
-  };
+document.getElementById('start-btn').addEventListener('click', async () => {
+  const startBtn = document.getElementById('start-btn');
+  const stopBtn  = document.getElementById('stop-btn');
+  startBtn.disabled = true;
+  try {
+    await iniciarCamara();
+    escanearInterval = setInterval(escanearFrame, 800);
+    stopBtn.disabled = false;
+  } catch (e) {
+    console.error('No pude arrancar cámara:', e);
+    startBtn.disabled = false;
+  }
 });
+
+document.getElementById('stop-btn').addEventListener('click', () => {
+  const startBtn = document.getElementById('start-btn');
+  const stopBtn  = document.getElementById('stop-btn');
+  videoEl.srcObject?.getTracks().forEach(t => t.stop());
+  clearInterval(escanearInterval);
+  stopBtn.disabled = true;
+  startBtn.disabled = false;
+});
+</script>
