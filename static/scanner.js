@@ -1,8 +1,3 @@
-<!-- Asegúrate de tener estos botones en tu HTML -->
-<button id="start-btn">▶️ Iniciar escaneo</button>
-<button id="stop-btn" disabled>■ Detener escaneo</button>
-<div id="reader"></div>
-
 <script>
 // Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
