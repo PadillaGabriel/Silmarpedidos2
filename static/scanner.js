@@ -4,6 +4,10 @@ const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
+videoEl.autoplay = true;
+videoEl.muted    = true;
+videoEl.playsInline = true;
+
 // ocultar y meter dentro de #reader para conservar tu CSS
 videoEl.style.cssText = `
   display: block;
