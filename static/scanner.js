@@ -5,7 +5,12 @@ const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
 // ocultar y meter dentro de #reader para conservar tu CSS
-videoEl.style.display  = 'none';
+videoEl.style.cssText = `
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
 canvasEl.style.display = 'none';
 document.getElementById('reader').append(videoEl, canvasEl);
 
