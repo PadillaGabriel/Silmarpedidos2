@@ -1,20 +1,21 @@
-// scanner.js
+// static/scanner.js
 
-// Sonido de aviso
+// — Sonido de aviso —
 const beep = new Audio('/static/beep.mp3');
 
-// Creamos los elementos de vídeo y canvas
+// — Vídeo & canvas para capturar frames —
 const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
-// Ajustes para el vídeo (inline, sin PiP, ocupando todo el contenedor)
-videoEl.autoplay                = true;
-videoEl.muted                   = true;
-videoEl.playsInline             = true;
-videoEl.disablePictureInPicture = true;
-videoEl.disableRemotePlayback   = true;
-videoEl.setAttribute('playsinline', '');
+// — Estilos y atributos del vídeo —
+Object.assign(videoEl, {
+  autoplay: true,
+  muted: true,
+  playsInline: true,
+  disablePictureInPicture: true,
+  disableRemotePlayback: true,
+});
 videoEl.setAttribute('webkit-playsinline', '');
 videoEl.style.cssText = `
   display: block;
@@ -25,32 +26,34 @@ videoEl.style.cssText = `
   aspect-ratio: 16/9;
 `;
 
-// Ocultamos el canvas; sólo lo usamos para capturar frames
+// ocultamos el canvas (solo sirve para capturar imagen)
 canvasEl.style.display = 'none';
 
-// Insertamos vídeo + canvas dentro de #reader
+// insertamos en el contenedor #reader
 const container = document.getElementById('reader');
 container.style.position = 'relative';
 container.append(videoEl, canvasEl);
 
-// Función que inicializa la cámara (busca cámara trasera si existe)
+let scanInterval;
+
+// — Inicializa la cámara (elige trasera si hay) —
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const back = devices.find(d =>
     d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
   );
-  const constraintVideo = back
+  const constraints = back
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
 
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width: { ideal: 640 }, height: { ideal: 480 } }
+    video: { ...constraints, width: { ideal: 640 }, height: { ideal: 480 } }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
 }
 
-// Función que captura un frame y lo envía al servidor para decodificar
+// — Envía un frame al servidor para decodificar el QR —
 async function escanearFrame() {
   if (!videoEl.videoWidth) return;
 
@@ -68,52 +71,92 @@ async function escanearFrame() {
         body: form,
         credentials: 'include'
       });
-      if (!res.ok) {
-        console.warn('HTTP', res.status);
-        return;
-      }
+      if (!res.ok) return;
       const json = await res.json();
-      console.log('respuesta decode-qr:', json);
-
       if (json.data) {
-        // aviso visual
+        // efecto visual
         videoEl.style.outline = '5px solid lime';
         setTimeout(() => videoEl.style.outline = '', 500);
-
-        // aviso sonoro
+        // sonido
         beep.play().catch(() => {});
-
-        // tu lógica con el dato decodificado
+        // procesa el ID decodificado
         escanear(json.data);
+        detenerEscaneo();
       }
     } catch (e) {
-      console.error('Error al escanear frame:', e);
+      console.error('decode-qr error:', e);
     }
   }, 'image/jpeg');
 }
 
-// Arrancamos todo al cargar la página
+// — Detiene el escaneo (parar intervalos y cámara) —
+function detenerEscaneo() {
+  clearInterval(scanInterval);
+  videoEl.srcObject?.getTracks().forEach(t => t.stop());
+  document.getElementById('stop-btn').disabled = true;
+}
+
+// — Lógica para manejar el ID encontrado o ingresado —
+async function escanear(id) {
+  // Ejemplo: llama a tu endpoint que devuelve detalle de pedido
+  const res = await fetch(`/api/pedidos/${id}`, { credentials: 'include' });
+  if (!res.ok) return;
+  const data = await res.json();
+  mostrarDetalle(data);
+}
+
+// — Muestra el detalle en el DOM —
+function mostrarDetalle(data) {
+  document.getElementById('cliente').textContent = data.cliente;
+  const tbody = document.getElementById('tabla-items');
+  tbody.innerHTML = '';
+  data.items.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><img src="${item.imagen}" width="50"></td>
+      <td>${item.titulo}</td>
+      <td>${item.sku}</td>
+      <td>${item.variante}</td>
+      <td>${item.cantidad}</td>
+    `;
+    tbody.append(tr);
+  });
+  document.getElementById('detalle-pedido').style.display = 'block';
+  document.getElementById('boton-armar').style.display = 'block';
+}
+
+// — Al cargar la página —
 document.addEventListener('DOMContentLoaded', () => {
-  // Botones de control
-  const startBtn = document.getElementById('start-btn');
-  const stopBtn  = document.getElementById('stop-btn');
+  // arrancamos la cámara y el intervalo
+  iniciarCamara().catch(e => console.error('Cámara:', e));
+  scanInterval = setInterval(escanearFrame, 800);
 
-  let intervalo;
+  // botón detener
+  const stopBtn = document.getElementById('stop-btn');
+  stopBtn.onclick = detenerEscaneo;
 
-  startBtn.onclick = () => {
-    iniciarCamara().catch(e => console.error('Cámara:', e));
-    intervalo = setInterval(escanearFrame, 800);
-    startBtn.disabled = true;
-    stopBtn.disabled  = false;
+  // subir imagen de QR
+  document.getElementById('input-escanear').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('frame', file, file.name);
+    try {
+      const res = await fetch('/decode-qr', {
+        method: 'POST',
+        body: form,
+        credentials: 'include'
+      });
+      const json = await res.json();
+      if (json.data) escanear(json.data);
+    } catch (err) {
+      console.error('decode-qr imagen:', err);
+    }
   };
 
-  stopBtn.onclick = () => {
-    clearInterval(intervalo);
-    videoEl.srcObject?.getTracks().forEach(t => t.stop());
-    startBtn.disabled = false;
-    stopBtn.disabled  = true;
+  // ingreso manual de ID
+  document.getElementById('btn-manual').onclick = () => {
+    const id = document.getElementById('manual-id').value.trim();
+    if (id) escanear(id);
   };
-
-  // Si quieres que arranque automáticamente en lugar de con botón, descomenta:
-  // startBtn.click();
 });
