@@ -8,10 +8,7 @@ const videoEl  = document.createElement('video');
 const canvasEl = document.createElement('canvas');
 const ctx      = canvasEl.getContext('2d');
 
-// Flag para controlar cuándo escanear
-let scanning = false;
-
-// Estilos y atributos del vídeo
+// Configuración inicial (igual que antes)
 videoEl.autoplay                = true;
 videoEl.muted                   = true;
 videoEl.playsInline             = true;
@@ -27,16 +24,20 @@ videoEl.style.cssText = `
   box-sizing: border-box;
   aspect-ratio: 1/1;
 `;
-
-// Ocultamos el canvas (solo lo usamos para captura)
 canvasEl.style.display = 'none';
 
-// Insertamos en #reader
 const container = document.getElementById('reader');
 container.style.position = 'relative';
 container.append(videoEl, canvasEl);
 
-// Inicializa la cámara trasera
+// Botones y mensajes
+const scanBtn    = document.getElementById('scan-btn');
+const stopBtn    = document.getElementById('stop-btn');
+const errorMsg   = document.getElementById('error-msg');
+
+// Variables de estado
+let stream = null;
+
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const back = devices.find(d =>
@@ -46,16 +47,27 @@ async function iniciarCamara() {
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
 
-  const stream = await navigator.mediaDevices.getUserMedia({
+  stream = await navigator.mediaDevices.getUserMedia({
     video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
 }
 
-// Envía un frame al servidor para decodificar QR
-async function escanearFrame() {
-  if (!videoEl.videoWidth) return;
+function detenerCamara() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+}
+
+// Dibuja un frame y lo envía al servidor UNA vez
+async function escanearUnaVez() {
+  if (!videoEl.videoWidth) {
+    errorMsg.textContent = 'No se pudo acceder a la cámara.';
+    return;
+  }
+  errorMsg.textContent = '';
 
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
@@ -64,7 +76,6 @@ async function escanearFrame() {
   canvasEl.toBlob(async blob => {
     const form = new FormData();
     form.append('frame', blob, 'frame.jpg');
-
     try {
       const res = await fetch('/decode-qr', {
         method: 'POST',
@@ -72,49 +83,47 @@ async function escanearFrame() {
         credentials: 'include'
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
       const json = await res.json();
-      if (json.data) {
-        // marco visual
-        videoEl.style.outline = '5px solid lime';
-        setTimeout(() => videoEl.style.outline = '', 500);
-
-        // sonido
-        beep.play().catch(() => {});
-
-        // tu lógica con el dato
-        escanear(json.data);
-        // y desactivo scanning para no repetir
-        scanning = false;
-      }
+      if (!json.data) throw new Error('QR no detectado');
+      // marcado visual
+      videoEl.style.outline = '5px solid green';
+      setTimeout(() => videoEl.style.outline = '', 500);
+      beep.play().catch(() => {});
+      mostrarDetalle(json.data);
+      detenerCamara();
     } catch (e) {
-      document.getElementById('error-msg').textContent = 'QR no detectado';
+      errorMsg.textContent = e.message;
     }
   }, 'image/jpeg');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  iniciarCamara().catch(e => {
-    console.error('Cámara:', e);
-    document.getElementById('error-msg').textContent = 'No se pudo acceder a la cámara';
+// Llena la sección de detalle con la respuesta del backend
+function mostrarDetalle(pedido) {
+  document.getElementById('detalle-pedido').style.display = 'block';
+  document.getElementById('cliente').textContent = pedido.buyer_name;
+  const tbody = document.getElementById('tabla-items');
+  tbody.innerHTML = '';
+  pedido.items.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><img src="${item.picture_url}" style="width:50px;"></td>
+      <td>${item.title}</td>
+      <td>${item.sku}</td>
+      <td>${item.variation}</td>
+      <td>${item.quantity}</td>
+    `;
+    tbody.append(tr);
   });
+  document.getElementById('boton-armar').style.display = 'block';
+}
 
-  // cada 800 ms solo si scanning === true
-  setInterval(() => {
-    if (scanning) escanearFrame();
-  }, 800);
+// Listeners
+scanBtn.addEventListener('click', async () => {
+  await iniciarCamara();
+  escanearUnaVez();
+});
 
-  // Botón para empezar a escanear
-  document.getElementById('scan-btn').onclick = () => {
-    document.getElementById('error-msg').textContent = '';
-    scanning = true;
-  };
-
-  // Botón para detener cámara
-  document.getElementById('stop-btn').onclick = () => {
-    scanning = false;
-    videoEl.srcObject?.getTracks().forEach(t => t.stop());
-  };
-
-  // (añade aquí tus listeners de input-escanear y btn-manual)
+stopBtn.addEventListener('click', () => {
+  detenerCamara();
+  errorMsg.textContent = '';
 });
