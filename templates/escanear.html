@@ -57,196 +57,124 @@
   </div>
 </main>
 {% endblock %}
-
 {% block scripts %}
 <script src="/static/html5-qrcode.min.js"></script>
 <script>
   let scanner;
   let ultimoShipId = "";
 
+  async function iniciarEscaneo() {
+    if (!navigator.mediaDevices?.getUserMedia) return console.error('getUserMedia no soportado');
 
-async function iniciarEscaneo() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    console.error('getUserMedia no soportado');
-    return;
+    let source;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoInputs = devices.filter(d=>d.kind==='videoinput');
+      const back = videoInputs.find(d=>/back|rear|environment/i.test(d.label));
+      source = back ? { deviceId:{ exact: back.deviceId } } : { facingMode:'environment' };
+    } catch {
+      source = { facingMode:'environment' };
+    }
+
+    const constraints = { video:{ ...source, width:{ ideal:640 }, height:{ ideal:480 } } };
+
+    scanner = new Html5Qrcode('reader');
+    scanner.start(
+      constraints,
+      { fps:10, qrbox:250, rememberLastUsedCamera:true },
+      decoded => {
+        scanner.stop().catch(()=>{});
+        escanear(decoded);
+      },
+      ()=>{}
+    )
+    .then(()=>console.log('Cámara iniciada'))
+    .catch(err=>{
+      console.error('No arrancó cámara:', err.name, err.message);
+      if(err.name==='OverconstrainedError') iniciarEscaneo();
+      if(err.name==='NotAllowedError') alert('Permiso denegado. Activa cámara en ajustes.');
+    });
   }
 
-  // Obtener dispositivos de vídeo
-  let videoSource;
-  try {
-    const dispositivos = await navigator.mediaDevices.enumerateDevices();
-    const videoInputs = dispositivos.filter(d => d.kind === 'videoinput');
-    const trasera = videoInputs.find(d => /back|rear|environment/i.test(d.label));
-    videoSource = trasera
-      ? { deviceId: { exact: trasera.deviceId } }
-      : { facingMode: 'environment' };
-  } catch {
-    videoSource = { facingMode: 'environment' };
-  }
-
-  const constraints = {
-    video: {
-      ...videoSource,
-      width: { ideal: 640 },
-      height: { ideal: 480 },
-    }
-  };
-
-  const scanner = new Html5Qrcode('reader');
-  scanner.start(
-    constraints,
-    { fps: 10, qrbox: 250, rememberLastUsedCamera: true },
-    decoded => {
-      console.log('QR decodificado:', decoded);
-      scanner.stop().catch(e => console.error('Error al detener scanner:', e));
-      escanear(decoded);
-    },
-    error => {
-      // lectura fallida, mantener stream abierto
-    }
-  )
-  .then(() => console.log('Cámara iniciada'))
-  .catch(err => {
-    console.error('No arrancó cámara:', err.name, err.message);
-    if (err.name === 'NotAllowedError') alert('Permiso denegado. Activa cámara en ajustes.');
-    if (err.name === 'OverconstrainedError') iniciarEscaneo(); // reintentar sin deviceId
-  });
-}
-
-  window.addEventListener("DOMContentLoaded", () => {
+  window.addEventListener('DOMContentLoaded',()=>{
     iniciarEscaneo();
 
-    document.getElementById("stop-btn").addEventListener("click", () => {
-      if (scanner._isScanning) {
-        scanner.stop()
-          .then(() => document.getElementById("stop-btn").innerText = "Reanudar escaneo")
-          .catch(console.error);
+    document.getElementById('stop-btn').addEventListener('click',()=>{
+      if(scanner?._isScanning){
+        scanner.stop().then(()=>document.getElementById('stop-btn').innerText='Reanudar escaneo');
       } else {
         iniciarEscaneo();
-        document.getElementById("stop-btn").innerText = "Detener escaneo";
+        document.getElementById('stop-btn').innerText='Detener escaneo';
       }
     });
 
-    document.getElementById("input-escanear").addEventListener("change", e => {
-      if (!e.target.files.length) return;
-      const qrImg = new Html5Qrcode("reader");
-      qrImg.scanFile(e.target.files[0], true)
-        .then(decoded => { qrImg.clear(); escanear(decoded); })
-        .catch(() => alert("No se pudo leer el QR."));
+    document.getElementById('input-escanear').addEventListener('change',e=>{
+      if(!e.target.files.length) return;
+      const imgScanner = new Html5Qrcode('reader');
+      imgScanner.scanFile(e.target.files[0],true)
+        .then(decoded=>{ imgScanner.clear(); escanear(decoded); })
+        .catch(()=>alert('No se pudo leer el QR.'));
     });
 
-    document.getElementById("btn-manual").addEventListener("click", () => {
-      const id = document.getElementById("manual-id").value.trim();
-      if (id) escanear(id);
+    document.getElementById('btn-manual').addEventListener('click',()=>{
+      const id=document.getElementById('manual-id').value.trim();
+      if(id) escanear(id);
+    });
+
+    document.getElementById('boton-armar').addEventListener('click',()=>{
+      if(!ultimoShipId) return alert('No hay shipment_id válido.');
+      const f=new FormData(); f.append('shipment_id',ultimoShipId);
+      fetch('/armar',{ method:'POST', body:f, credentials:'include' })
+        .then(r=>r.json())
+        .then(r=>{ if(r.success) window.location.reload(); else alert(r.error); })
+        .catch(()=>alert('Error al marcar armado'));
     });
   });
 
-    // Función que maneja el escaneo o entrada manual
-    async function escanear(raw) {
-      const { order_id, shipment_id } = parseQr(raw);
-      console.log("Llamando a /escanear con shipment_id:", shipment_id);
-      ultimoShipId = shipment_id;
-      if (!shipment_id) {
-        return alert("El QR no incluye un shipment_id válido.");
-      }
-      const form = new FormData();
-      form.append("shipment_id", shipment_id);
-      try {
-        const res = await fetch("/escanear", {
-          method: "POST",
-          body: form,
-          credentials: "include"
-        });
-        console.log("Respuesta /escanear status:", res.status);
-        if (!res.ok) {
-          const errText = await res.text();
-          return alert("(" + res.status + ") " + errText);
-        }
-        const data = await res.json();
-        document.getElementById("cliente").innerText = data.detalle.cliente;
-        const tabla = document.getElementById("tabla-items");
-        tabla.innerHTML = "";
-        data.detalle.items.forEach(item => {
-          const imgUrl = (Array.isArray(item.imagenes) && item.imagenes.length)
-            ? item.imagenes[0].thumbnail
-            : "https://via.placeholder.com/150";
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
-              <img src="${imgUrl}" width="80" style="border-radius:4px;">
-            </td>
-            <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.titulo}</td>
-            <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku || ""}</td>
-            <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante || ""}</td>
-            <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
-          `;
-          tabla.appendChild(row);
-        });
-        document.getElementById("detalle-pedido").style.display = "block";
-        document.getElementById("boton-armar").style.display = "inline-block";
-      } catch (err) {
-        console.error(err);
-        alert("Error al obtener detalles del pedido.");
-      }
+  async function escanear(raw){
+    const { order_id, shipment_id } = parseQr(raw);
+    ultimoShipId = shipment_id || '';
+    if(!shipment_id) return alert('QR sin shipment_id válido.');
+    const f=new FormData(); f.append('shipment_id',shipment_id);
+    try {
+      const r=await fetch('/escanear',{ method:'POST', body:f, credentials:'include' });
+      if(!r.ok) return alert('('+r.status+') '+await r.text());
+      const d=await r.json();
+      document.getElementById('cliente').innerText=d.detalle.cliente;
+      const t=document.getElementById('tabla-items'); t.innerHTML='';
+      d.detalle.items.forEach(item=>{
+        const img=(item.imagenes?.[0]?.thumbnail)||'https://via.placeholder.com/150';
+        const tr=document.createElement('tr');
+        tr.innerHTML=`
+          <td style="text-align:center;padding:0.5rem;border-bottom:1px solid #eee;">
+            <img src="${img}" width="80" style="border-radius:4px;">
+          </td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.titulo}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.sku||''}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.variante||''}</td>
+          <td style="padding:0.5rem;border-bottom:1px solid #eee;">${item.cantidad}</td>`;
+        t.appendChild(tr);
+      });
+      document.getElementById('detalle-pedido').style.display='block';
+      document.getElementById('boton-armar').style.display='inline-block';
+    } catch {
+      alert('Error al obtener detalles del pedido.');
     }
+  }
 
-    function parseQr(decoded) {
-      let order_id = null, shipment_id = null;
-      if (decoded.trim().startsWith("{")) {
-        try {
-          const payload = JSON.parse(decoded);
-          if (payload.id) {
-            shipment_id = payload.id;
-            return { order_id: null, shipment_id };
-          }
-        } catch {}
-      }
-      try {
-        const url = new URL(decoded);
-        const parts = url.pathname.split("/").filter(p => p);
-        if (parts[0] === "shipments") {
-          shipment_id = parts[1] || null;
-        } else if (parts[0] === "orders") {
-          order_id = parts[1] || null;
-        }
-        return { order_id, shipment_id };
-      } catch {}
-      order_id = decoded.trim();
-      return { order_id, shipment_id: null };
+  function parseQr(s){
+    let order_id=null, shipment_id=null;
+    if(s.trim().startsWith('{')){
+      try{ const p=JSON.parse(s); if(p.id) return { order_id:null, shipment_id:p.id }; }catch{}
     }
-
-    // ***** Aquí: listener para "boton-armar" *****
-    document.getElementById("boton-armar").addEventListener("click", () => {
-      console.log("→ Click en 'Marcar como armado', ultimoShipId =", ultimoShipId);
-      if (!ultimoShipId) {
-        return alert("No hay ningún shipment_id válido para marcar como armado.");
-      }
-      const form = new FormData();
-      form.append("shipment_id", ultimoShipId);
-      fetch("/armar", {
-        method: "POST",
-        body: form,
-        credentials: "include"
-      })
-        .then(r => {
-          console.log("JS → respuesta /armar status:", r.status);
-          return r.json();
-        })
-        .then(resp => {
-          console.log("JS → resp JSON /armar:", resp);
-          if (resp.success) {
-            alert("Pedido(s) marcados como armado");
-            window.location.reload();
-          } else {
-            alert(resp.error || "No se pudo marcar como armado");
-          }
-        })
-        .catch(err => {
-          console.error("JS → Error en fetch /armar:", err);
-          alert("Error al marcar armado");
-        });
-    });
-
-  
+    try{
+      const u=new URL(s);
+      const p=u.pathname.split('/').filter(x=>x);
+      if(p[0]==='shipments') shipment_id=p[1]||null;
+      if(p[0]==='orders') order_id=p[1]||null;
+      return { order_id, shipment_id };
+    }catch{}
+    return { order_id:s.trim(), shipment_id:null };
+  }
 </script>
 {% endblock %}
