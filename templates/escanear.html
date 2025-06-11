@@ -65,33 +65,51 @@
   let ultimoShipId = "";
 
 
- async function iniciarEscaneo() {
-  // Pedimos la lista de cámaras disponibles
-  const devices = await Html5Qrcode.getCameras();
-  if (!devices || !devices.length) {
-    return alert("No se detectaron cámaras en este dispositivo.");
+async function iniciarEscaneo() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    console.error('getUserMedia no soportado');
+    return;
   }
 
-  // Buscamos la trasera (environment) por etiqueta
-  let cameraId = devices[0].id; 
-  const back = devices.find(d => /back|rear|environment/i.test(d.label));
-  if (back) cameraId = back.id;
+  // Obtener dispositivos de vídeo
+  let videoSource;
+  try {
+    const dispositivos = await navigator.mediaDevices.enumerateDevices();
+    const videoInputs = dispositivos.filter(d => d.kind === 'videoinput');
+    const trasera = videoInputs.find(d => /back|rear|environment/i.test(d.label));
+    videoSource = trasera
+      ? { deviceId: { exact: trasera.deviceId } }
+      : { facingMode: 'environment' };
+  } catch {
+    videoSource = { facingMode: 'environment' };
+  }
 
-  scanner = new Html5Qrcode("reader");
+  const constraints = {
+    video: {
+      ...videoSource,
+      width: { ideal: 640 },
+      height: { ideal: 480 },
+    }
+  };
+
+  const scanner = new Html5Qrcode('reader');
   scanner.start(
-    cameraId,                     // pasamos el ID en vez de facingMode
-    { fps: 10, qrbox: 250 },
+    constraints,
+    { fps: 10, qrbox: 250, rememberLastUsedCamera: true },
     decoded => {
-      console.log("✅ QR decodificado:", decoded);
-      scanner.stop().catch(console.error);
+      console.log('QR decodificado:', decoded);
+      scanner.stop().catch(e => console.error('Error al detener scanner:', e));
       escanear(decoded);
     },
-    err => console.warn("Falló lectura:", err)
+    error => {
+      // lectura fallida, mantener stream abierto
+    }
   )
-  .then(() => console.log("🎥 Cámara iniciada con ID", cameraId))
+  .then(() => console.log('Cámara iniciada'))
   .catch(err => {
-    console.error("❌ Error al iniciar cámara con ID", cameraId, err);
-    alert("No se pudo iniciar el escáner:\n" + err.message);
+    console.error('No arrancó cámara:', err.name, err.message);
+    if (err.name === 'NotAllowedError') alert('Permiso denegado. Activa cámara en ajustes.');
+    if (err.name === 'OverconstrainedError') iniciarEscaneo(); // reintentar sin deviceId
   });
 }
 
