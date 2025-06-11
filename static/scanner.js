@@ -1,21 +1,22 @@
 // scanner.js
 
+// --- Configuración de elementos ---
+const videoEl      = document.createElement('video');
+const canvasEl     = document.createElement('canvas');
+const ctx          = canvasEl.getContext('2d');
+const scanBtn      = document.getElementById('scan-btn');
+const stopBtn      = document.getElementById('stop-btn');
+const errorMsg     = document.getElementById('error-msg');
+const detalleCard  = document.getElementById('detalle-pedido');
+const clienteEl    = document.getElementById('cliente');
+const tablaItems   = document.getElementById('tabla-items');
+
 // Sonido de aviso
 const beep = new Audio('/static/beep.mp3');
 
-// Elementos de vídeo y canvas
-const videoEl  = document.createElement('video');
-const canvasEl = document.createElement('canvas');
-const ctx      = canvasEl.getContext('2d');
-
-// Configuración inicial (igual que antes)
-videoEl.autoplay                = true;
-videoEl.muted                   = true;
-videoEl.playsInline             = true;
-videoEl.disablePictureInPicture = true;
-videoEl.disableRemotePlayback   = true;
-videoEl.setAttribute('playsinline','');
-videoEl.setAttribute('webkit-playsinline','');
+// Preparamos el contenedor #reader
+const container = document.getElementById('reader');
+container.style.position = 'relative';
 videoEl.style.cssText = `
   display: block;
   width: 100%;
@@ -24,106 +25,130 @@ videoEl.style.cssText = `
   box-sizing: border-box;
   aspect-ratio: 1/1;
 `;
+videoEl.autoplay                = true;
+videoEl.muted                   = true;
+videoEl.playsInline             = true;
+videoEl.setAttribute('playsinline','');
+videoEl.setAttribute('webkit-playsinline','');
 canvasEl.style.display = 'none';
-
-const container = document.getElementById('reader');
-container.style.position = 'relative';
 container.append(videoEl, canvasEl);
 
-// Botones y mensajes
-const scanBtn    = document.getElementById('scan-btn');
-const stopBtn    = document.getElementById('stop-btn');
-const errorMsg   = document.getElementById('error-msg');
-
-// Variables de estado
+// --- Funciones de cámara ---
 let stream = null;
-
 async function iniciarCamara() {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const back = devices.find(d =>
     d.kind === 'videoinput' && /back|rear|environment/i.test(d.label)
   );
-  const constraintVideo = back
+  const constraints = back
     ? { deviceId: { exact: back.deviceId } }
     : { facingMode: 'environment' };
-
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { ...constraintVideo, width:{ideal:640}, height:{ideal:480} }
+    video: { ...constraints, width:{ideal:640}, height:{ideal:480} }
   });
   videoEl.srcObject = stream;
   await videoEl.play();
 }
 
 function detenerCamara() {
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
+  if (stream) stream.getTracks().forEach(t => t.stop());
 }
 
-// Dibuja un frame y lo envía al servidor UNA vez
-async function escanearUnaVez() {
-  if (!videoEl.videoWidth) {
-    errorMsg.textContent = 'No se pudo acceder a la cámara.';
-    return;
-  }
-  errorMsg.textContent = '';
-
+// --- Decodificación de un frame ---
+async function decodificarFrame() {
+  if (!videoEl.videoWidth) return null;
   canvasEl.width  = videoEl.videoWidth;
   canvasEl.height = videoEl.videoHeight;
   ctx.drawImage(videoEl, 0, 0);
+  return new Promise(resolve => {
+    canvasEl.toBlob(blob => resolve(blob), 'image/jpeg');
+  });
+}
 
-  canvasEl.toBlob(async blob => {
+// --- Lógica de escaneo bajo demanda ---
+scanBtn.addEventListener('click', async () => {
+  errorMsg.textContent = '';
+  detalleCard.style.display = 'none';
+
+  try {
+    // arrancamos cámara y esperamos un frame
+    await iniciarCamara();
+    const blob = await decodificarFrame();
+    detenerCamara();
+
+    if (!blob) {
+      throw new Error('No se capturó imagen');
+    }
+
+    // enviamos al servidor
     const form = new FormData();
     form.append('frame', blob, 'frame.jpg');
-    try {
-      const res = await fetch('/decode-qr', {
-        method: 'POST',
-        body: form,
-        credentials: 'include'
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json.data) throw new Error('QR no detectado');
-      // marcado visual
-      videoEl.style.outline = '5px solid green';
-      setTimeout(() => videoEl.style.outline = '', 500);
-      beep.play().catch(() => {});
-      mostrarDetalle(json.data);
-      detenerCamara();
-    } catch (e) {
-      errorMsg.textContent = e.message;
+    const res = await fetch('/decode-qr', {
+      method: 'POST',
+      body: form,
+      credentials: 'include'
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
     }
-  }, 'image/jpeg');
-}
+    const json = await res.json();
+    console.log('decode-qr ->', json);
 
-// Llena la sección de detalle con la respuesta del backend
-function mostrarDetalle(pedido) {
-  document.getElementById('detalle-pedido').style.display = 'block';
-  document.getElementById('cliente').textContent = pedido.buyer_name;
-  const tbody = document.getElementById('tabla-items');
-  tbody.innerHTML = '';
-  pedido.items.forEach(item => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><img src="${item.picture_url}" style="width:50px;"></td>
-      <td>${item.title}</td>
-      <td>${item.sku}</td>
-      <td>${item.variation}</td>
-      <td>${item.quantity}</td>
-    `;
-    tbody.append(tr);
-  });
-  document.getElementById('boton-armar').style.display = 'block';
-}
+    if (!json.data) {
+      throw new Error('QR no detectado');
+    }
 
-// Listeners
-scanBtn.addEventListener('click', async () => {
-  await iniciarCamara();
-  escanearUnaVez();
+    // llamamos a tu API para obtener detalle
+    const id = json.data; // puede ser shipment_id u order_id
+    const detalleRes = await fetch(`/api/get_order?shipment_id=${id}`);
+    if (!detalleRes.ok) {
+      throw new Error(`Detalle HTTP ${detalleRes.status}`);
+    }
+    const detalleJson = await detalleRes.json();
+    console.log('detalle order ->', detalleJson);
+
+    if (!detalleJson.items || detalleJson.items.length === 0) {
+      throw new Error('No hay items en el pedido');
+    }
+
+    mostrarDetalle(detalleJson);
+
+    // aviso sonoro y visual
+    videoEl.style.outline = '5px solid lime';
+    setTimeout(() => videoEl.style.outline = '', 500);
+    beep.play().catch(() => {});
+
+  } catch (e) {
+    detenerCamara();
+    console.warn(e);
+    errorMsg.textContent = e.message;
+  }
 });
 
+// botón detener cámara manual
 stopBtn.addEventListener('click', () => {
   detenerCamara();
-  errorMsg.textContent = '';
+  errorMsg.textContent = 'Escaneo detenido';
 });
+
+// --- Pinta en la página el detalle recibido ---
+function mostrarDetalle(pedido) {
+  clienteEl.textContent = pedido.cliente;
+  tablaItems.innerHTML = ''; // limpio tabla
+
+  pedido.items.forEach(it => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="padding:0.5rem; border-bottom:1px solid #ccc;">
+        <img src="${it.imagenes[0].thumbnail}" alt="" style="height:50px;">
+      </td>
+      <td style="padding:0.5rem; border-bottom:1px solid #ccc;">${it.titulo}</td>
+      <td style="padding:0.5rem; border-bottom:1px solid #ccc;">${it.sku}</td>
+      <td style="padding:0.5rem; border-bottom:1px solid #ccc;">${it.variante}</td>
+      <td style="padding:0.5rem; border-bottom:1px solid #ccc;">${it.cantidad}</td>
+    `;
+    tablaItems.append(tr);
+  });
+
+  detalleCard.style.display = 'block';
+}
