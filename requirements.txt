@@ -6,3 +6,5 @@ itsdangerous
 requests
 psycopg2-binary
 passlib[bcrypt] 
+numpy
+opencv-python
