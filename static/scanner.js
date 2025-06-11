@@ -23,7 +23,7 @@ videoEl.style.cssText = `
   height: 100%;
   object-fit: cover;
   box-sizing: border-box;
-  aspect-ratio: 16/9;
+  aspect-ratio: 1/1;
 `;
 
 // ocultamos el canvas (solo sirve para capturar imagen)
@@ -73,14 +73,22 @@ async function escanearFrame() {
       });
       if (!res.ok) return;
       const json = await res.json();
-      if (json.data) {
+      console.log('decode-qr:', json);
+
+      if (json.error) {
+        // mostramos error al usuario
+        alert(json.error);
+        return;
+      }
+
+      if (json.data && json.data.shipment_id) {
         // efecto visual
         videoEl.style.outline = '5px solid lime';
         setTimeout(() => videoEl.style.outline = '', 500);
         // sonido
         beep.play().catch(() => {});
-        // procesa el ID decodificado
-        escanear(json.data);
+        // llamamos a tu lógica con el shipment_id
+        escanear(json.data.shipment_id);
         detenerEscaneo();
       }
     } catch (e) {
@@ -88,6 +96,7 @@ async function escanearFrame() {
     }
   }, 'image/jpeg');
 }
+
 
 // — Detiene el escaneo (parar intervalos y cámara) —
 function detenerEscaneo() {
