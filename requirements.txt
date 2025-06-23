@@ -6,4 +6,4 @@ itsdangerous
 requests
 Sqlalchemy
 passlib[bcrypt] 
-
+cv2
