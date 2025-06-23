@@ -7,3 +7,4 @@ requests
 Sqlalchemy
 passlib[bcrypt] 
 opencv-python
+psycopg2-binary
