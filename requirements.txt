@@ -6,4 +6,5 @@ itsdangerous
 requests
 Sqlalchemy
 passlib[bcrypt] 
-cv2
+opencv-python
+
