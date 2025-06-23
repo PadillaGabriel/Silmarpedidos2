@@ -7,4 +7,3 @@ requests
 Sqlalchemy
 passlib[bcrypt] 
 opencv-python
-os
