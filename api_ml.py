@@ -148,7 +148,9 @@ def parse_order_data(order_data: dict) -> dict:
             "sku":      sku,
             "variante": variante,
             "cantidad": cantidad,
-            "imagenes": imgs
+            "imagenes": imgs,
+            "item_id": prod.get("id"),
+            "variation_id": prod.get("variation_id")
         })
 
     return {"cliente": cliente, "items": items}
@@ -200,10 +202,29 @@ def get_order_details(order_id: str = None, shipment_id: str = None) -> dict:
             #   },
             #   { ... segunda entrada ... }
             # ]
+            try:
+                shipment_data = fetch_api(f"/shipments/{shipment_id}", extra_headers=common_headers)
+                shipment_status = shipment_data.get("status", "desconocido")
+            except Exception as e:
+                logger.warning("No se pudo obtener el estado del envío: %s", e)
+                shipment_status = "desconocido"
+
+                #  Traducción a español
+            estado_traducido = {
+                "pending": "Pendiente",
+                "ready_to_ship": "Listo para enviar",
+                "shipped": "Enviado",
+                "delivered": "Entregado",
+                "not_delivered": "No entregado",
+                "cancelled": "Cancelado",
+                "returned": "Devuelto"
+            }
+            estado_envio = estado_traducido.get(shipment_status, shipment_status.capitalize())
 
             if not isinstance(shipment_items, list) or len(shipment_items) == 0:
                 logger.error("No hay shipping_items para shipment_id=%s", shipment_id)
-                return {"cliente": "Error", "items": [], "primer_order_id": None}
+                return {"cliente": "Error", "items": [], "primer_order_id": None, "shipment_status": shipment_status}
+
 
             all_items  = []
             cliente    = None
@@ -243,6 +264,15 @@ def get_order_details(order_id: str = None, shipment_id: str = None) -> dict:
                             "order_items": [oi]
                         }
                         detalle_unico = parse_order_data(temp_order)
+                        # Enriquecer cada ítem con permalink
+                    for item in detalle_unico.get("items", []):
+                        item_id = entry.get("item_id")
+                        try:
+                            item_data = fetch_api(f"/items/{item_id}", extra_headers=common_headers)
+                            item["permalink"] = item_data.get("permalink")
+                        except Exception as e:
+                            logger.warning("No se pudo obtener permalink de item_id=%s: %s", item_id, e)
+
                         # parse_order_data(…) nos devuelve:
                         # { "cliente": "...", "items": [ {titulo, sku, variante, cantidad, imagenes}, … ] }
                         if detalle_unico.get("items"):
@@ -250,11 +280,14 @@ def get_order_details(order_id: str = None, shipment_id: str = None) -> dict:
                         break
 
             if all_items:
-                return {
-                    "cliente":         cliente or "Cliente desconocido",
-                    "items":           all_items,
-                    "primer_order_id": primer_oid
-                }
+                 return {
+                "cliente": cliente or "Cliente desconocido",
+                "items": all_items,
+                "primer_order_id": primer_oid,
+                "shipment_status": shipment_status,  # ← este es el que te falta
+                "estado_envio": estado_envio
+            }
+
 
             logger.error("No se obtuvieron ítems tras procesar shipment_id=%s", shipment_id)
         except Exception as e:

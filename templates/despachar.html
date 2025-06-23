@@ -32,6 +32,7 @@
     <div class="card-body">
       <h3>Detalle del Pedido</h3>
       <p><strong>Cliente:</strong> <span id="cliente"></span></p>
+      <p><strong>Estado del Envío:</strong> <span id="estado_envio"></span></p>
       <table class="detail-table">
         <thead>
           <tr>
@@ -78,26 +79,78 @@
 
 {% block scripts %}
 <script src="/static/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
   let scanner;
+  let escaneoActivo = true;
   let ultimoOrderId = "";
   let ultimoShipId = "";
 
-  function iniciarEscaneo() {
+function mostrarToastError(mensaje) {
+  const toast = document.getElementById("toast-alert");
+  const body = document.getElementById("toast-body");
+  body.innerText = mensaje;
+
+  toast.classList.add("show");
+}
+
+function ocultarToast() {
+  const toast = document.getElementById("toast-alert");
+  toast.classList.remove("show");
+}
+
+
+
+async function iniciarEscaneo() {
+  if (!scanner) {
     scanner = new Html5Qrcode("reader");
-    scanner.start(
+  }
+
+  escaneoActivo = true;  // 👈 Lo movemos arriba para evitar clicks rápidos que fallan
+  try {
+    await scanner.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
-      decoded => {
-        scanner.stop().catch(console.error);
-        escanear(decoded);
+      async (decodedText) => {
+        console.log("✅ QR leído:", decodedText);
+        await detenerEscaneo();
+        await escanear(decodedText);
       },
-      () => {}
-    ).catch(console.error);
+      (errorMessage) => {
+        // Lecturas fallidas silenciosas
+      }
+    );
+    document.getElementById("stop-btn").innerText = "Detener escaneo";
+    console.log("🎥 Escaneo iniciado");
+  } catch (err) {
+    console.error("❌ Error iniciando escaneo:", err);
+    escaneoActivo = false;  // 🔁 revertir si falló
   }
+}
+async function detenerEscaneo() {
+  if (scanner) {
+    const estado = await scanner.getState();
+    console.log("📡 Estado del escáner:", estado);
+
+    if (estado === Html5QrcodeScannerState.SCANNING || estado === "SCANNING") {
+      try {
+        await scanner.stop();
+        escaneoActivo = false;
+        document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
+        console.log("📴 Escaneo detenido correctamente");
+      } catch (err) {
+        console.error("❌ Error al detener escaneo:", err);
+      }
+    }
+  }
+}
+
 
   function mostrarDetalle(detalle) {
     document.getElementById("cliente").innerText = detalle.cliente;
+    document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
+
     const tabla = document.getElementById("tabla-items-despachar");
     tabla.innerHTML = "";
     detalle.items.forEach(item => {
@@ -106,10 +159,16 @@
         : "https://via.placeholder.com/150";
       const row = document.createElement("tr");
       row.innerHTML = `
+      
+
         <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
           <img src="${imgUrl}" width="80" style="border-radius:4px;">
         </td>
-        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.titulo}</td>
+        <td style="padding:0.5rem; border-bottom:1px solid #eee;">
+  ${item.permalink
+    ? `<a href="${item.permalink}" target="_blank" style="text-decoration:none; color:#007bff;">${item.titulo}</a>`
+    : item.titulo}
+</td>
         <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku}</td>
         <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
         <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
@@ -117,21 +176,22 @@
       tabla.appendChild(row);
     });
     ultimoOrderId = detalle.primer_order_id || "";
-    document.getElementById("order_id_hidden").value = ultimoOrderId;
-    document.getElementById("shipment_id_hidden").value = ultimoShipId;
+    document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
+    document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
     document.getElementById("detalle-pedido").style.display = "block";
   }
 
 async function escanear(raw) {
+  console.log("🔍 Llamado a escanear() con:", raw); // ✅
   let shipmentVal;
   try {
-    // Si raw es un JSON válido, extraer el id
     const obj = JSON.parse(raw);
     shipmentVal = obj.id;
   } catch {
-    // Si no es JSON, asumir que raw ya es el ID
     shipmentVal = raw;
   }
+  console.log("📦 shipment_id:", shipmentVal);
+
   ultimoShipId = shipmentVal;
   document.getElementById("shipment_id_hidden").value = shipmentVal;
 
@@ -143,32 +203,73 @@ async function escanear(raw) {
       method: "POST",
       body: form
     });
-    if (!res.ok) throw new Error();
     const data = await res.json();
-    if (data.success) mostrarDetalle(data.detalle);
+    console.log("📥 Respuesta de /escanear:", data); // ✅
+
+    if (data.success) {
+      mostrarDetalle(data.detalle);
+    } else {
+      mostrarToastError(data.error || "No se pudo obtener el pedido.");
+    }
+  } catch (e) {
+    console.error("❌ Error al llamar /escanear:", e);
+    mostrarToastError("Error al obtener detalles del pedido.");
+  }
+}
+async function buscarManual() {
+  const id = document.getElementById("manual-id").value.trim();
+  if (!id) {
+    mostrarToastError("Por favor ingresá un ID de envío válido.");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("shipment_id", id);
+
+  try {
+    const res = await fetch("/escanear", {
+      method: "POST",
+      body: form,
+      credentials: "include"
+    });
+    const data = await res.json();
+    if (!data.success) {
+      mostrarToastError(data.error || "No se pudo obtener el pedido.");
+      return;
+    }
+
+    mostrarDetalle(data.detalle);  // ← esta función debe estar definida para renderizar los datos
   } catch {
-    alert("Error al obtener detalles del pedido.");
+    mostrarToastError("Error al conectar con el servidor.");
   }
 }
 
 
-  function buscarManual() {
-    const id = document.getElementById("manual-id").value.trim();
-    if (id) escanear(id);
-  }
-
   window.addEventListener("DOMContentLoaded", () => {
+   iniciarEscaneo()
+document.getElementById("stop-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("stop-btn");
+
+  if (scanner && escaneoActivo) {
+    try {
+      await scanner.stop();
+      escaneoActivo = false;
+      btn.innerText = "Reiniciar escaneo";
+    } catch (err) {
+      console.error("❌ Error al detener el escáner:", err);
+    }
+  } else {
+    // Limpiar vista antes de reiniciar
+    document.getElementById("detalle-pedido").style.display = "none";
+    document.getElementById("tabla-items-despachar").innerHTML = "";
+    document.getElementById("cliente").innerText = "";
+    document.getElementById("estado_envio").innerText = "";
+    document.getElementById("order_id_hidden").value = "";
+    document.getElementById("shipment_id_hidden").value = "";
+
     iniciarEscaneo();
-    document.getElementById("stop-btn").addEventListener("click", () => {
-      if (scanner && scanner._isScanning) {
-        scanner.stop().then(() => {
-          document.getElementById("stop-btn").innerText = "Reanudar escaneo";
-        });
-      } else {
-        iniciarEscaneo();
-        document.getElementById("stop-btn").innerText = "Detener escaneo";
-      }
-    });
+  }
+});
     document.getElementById("input-escanear").addEventListener("change", e => {
       if (!e.target.files.length) return;
       const qrImg = new Html5Qrcode("reader");
@@ -177,29 +278,29 @@ async function escanear(raw) {
           qrImg.clear();
           escanear(decoded);
         })
-        .catch(() => alert("No se pudo leer el QR."));
+        .catch(() => mostrarToastError("No se pudo leer el QR."));
     });
     document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
     document.getElementById("despachar-form").addEventListener("submit", async e => {
       e.preventDefault();
       const formData = new FormData(e.target);
-      const messageDiv = document.getElementById("message");
-      messageDiv.innerHTML = "";
-      try {
-        const resp = await fetch("/despachar", {
-          method: "POST",
-          body: formData
-        });
-        const data = await resp.json();
-        if (!data.success) {
-          messageDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-          return;
-        }
-        messageDiv.innerHTML = `<div class="alert alert-success">${data.mensaje}</div>`;
-      } catch {
-        messageDiv.innerHTML = `<div class="alert alert-danger">Error al conectar con el servidor</div>`;
-      }
+try {
+  const resp = await fetch("/despachar", {
+    method: "POST",
+    body: formData
+  });
+  const data = await resp.json();
+  if (!data.success) {
+    mostrarToastError(data.error || "Error al despachar.");
+    return;
+  }
+  mostrarToastError(data.mensaje || "Pedido despachado correctamente."); // opcional
+} catch {
+  mostrarToastError("Error al conectar con el servidor.");
+}
     });
   });
+  document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
+
 </script>
 {% endblock %}

@@ -60,11 +60,9 @@
               <th>Título</th>
               <th>Cantidad</th>
               <th>Estado</th>
-              <th>Fecha Armado</th>
               <th>Fecha Despacho</th>
               <th>Logística</th>
-              <th>Tipo Envío</th>
-              <th>Usuario</th>
+              <th>Usuario Despacho</th>
             </tr>
           </thead>
           <tbody>
@@ -76,11 +74,9 @@
                   <td>{{ p.titulo }}</td>
                   <td>{{ p.cantidad }}</td>
                   <td>{{ p.estado|capitalize }}</td>
-                  <td>{{ p.fecha_armado or "—" }}</td>
                   <td>{{ p.fecha_despacho or "—" }}</td>
                   <td>{{ p.logistica or "—" }}</td>
-                  <td>{{ p.tipo_envio or "—" }}</td>
-                  <td>{{ p.usuario or "—" }}</td>
+                  <td>{{ p.usuario_despacho or "—" }}</td>
                 </tr>
               {% endfor %}
             {% else %}
