@@ -1,4 +1,30 @@
+# Ignorar entornos virtuales
+venv/
+Venv/
+ENV/
+env/
+
+# Archivos y carpetas de caché de Python
 __pycache__/
-*.pyc
-pedidos.db
-pedidos.sqbpro
+*.py[cod]
+*$py.class
+
+# Archivos de base de datos
+*.db
+*.sqlite3
+
+# Archivos de entorno
+.env
+.env.*
+
+# Archivos de logs
+*.log
+
+# Configuraciones del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales de editores
+.vscode/
+.idea/
+*.swp
