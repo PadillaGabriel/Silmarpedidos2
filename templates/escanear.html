@@ -239,6 +239,13 @@ document.querySelectorAll(".check-item").forEach(input => {
     const variationId = input.dataset.variationId || "";
     const marcado = input.checked;
 
+    // 🔄 Sincronizar con el otro checkbox del mismo ítem
+    document.querySelectorAll(`.check-item[data-item-id="${itemId}"][data-variation-id="${variationId}"]`).forEach(other => {
+      if (other !== input) {
+        other.checked = marcado;
+      }
+    });
+
     guardarChecklist(shipmentId, itemId, variationId, marcado);
     validarChecklist();
   });
