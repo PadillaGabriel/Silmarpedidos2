@@ -1367,3 +1367,17 @@ ul.config-list li {
     display: block !important;
   }
 }
+
+@media (max-width: 600px) {
+  .busqueda-manual {
+    flex-wrap: nowrap !important;
+  }
+  #manual-id {
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  #btn-manual {
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+}
