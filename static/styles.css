@@ -1248,6 +1248,13 @@ ul.config-list li {
   object-fit: cover !important;
   border-radius: 12px;
 }
+#reader__scan_region {
+  border: 2px dashed #00c853;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 200, 83, 0.3);
+  margin: auto;
+}
+
 
 
 
