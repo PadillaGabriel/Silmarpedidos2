@@ -202,7 +202,9 @@ function renderDetalle(detalle) {
     card.className = "detalle-card";
     card.innerHTML = `
       <div class="detalle-titulo">${item.titulo}</div>
-      <img src="${imgUrl}" alt="Imagen del producto">
+      <a href="https://articulo.mercadolibre.com.ar/MLA${item.item_id}" target="_blank">
+        <img src="${imgUrl}" alt="Imagen del producto" class="img-publicacion">
+      </a>
       <div class="detalle-info">
         <div><strong>SKU:</strong> ${item.sku}</div>
         <div><strong>Proveedor:</strong> ${item.codigo_proveedor || "-"}</div>
@@ -224,7 +226,11 @@ function renderDetalle(detalle) {
     // ✅ Fila de tabla (desktop)
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td><img src="${imgUrl}" style="width:60px; border-radius:4px;"></td>
+      <td>
+        <a href="https://articulo.mercadolibre.com.ar/MLA${item.item_id}" target="_blank">
+          <img src="${imgUrl}" style="width:60px; border-radius:4px;" class="img-publicacion">
+        </a>
+      </td>
       <td>${item.titulo}</td>
       <td>${item.sku}</td>
       <td>${item.codigo_proveedor || "-"}</td>
