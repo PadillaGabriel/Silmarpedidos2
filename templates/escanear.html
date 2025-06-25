@@ -202,7 +202,7 @@ function renderDetalle(detalle) {
     card.className = "detalle-card";
     card.innerHTML = `
       <div class="detalle-titulo">${item.titulo}</div>
-      <a href="https://articulo.mercadolibre.com.ar/MLA${item.item_id}" target="_blank">
+      <a href="${item.permalink}" target="_blank">
         <img src="${imgUrl}" alt="Imagen del producto" class="img-publicacion">
       </a>
       <div class="detalle-info">
@@ -227,7 +227,7 @@ function renderDetalle(detalle) {
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>
-        <a href="https://articulo.mercadolibre.com.ar/MLA${item.item_id}" target="_blank">
+        <a href="${item.permalink}" target="_blank">
           <img src="${imgUrl}" style="width:60px; border-radius:4px;" class="img-publicacion">
         </a>
       </td>
