@@ -1190,7 +1190,7 @@ ul.config-list li {
 #btn-manual {
   padding: 0.75rem 1.25rem;
   background-color: var(--primary);
-  color: var(--blanco);
+  color: #fff;
   border: none;
   border-radius: var(--border-radius);
   font-size: 1rem;
