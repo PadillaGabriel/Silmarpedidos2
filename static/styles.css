@@ -1171,26 +1171,33 @@ ul.config-list li {
   }
 
   /* Ajustar celda de ID manual y botón “Buscar” */
-  #manual-id {
-    width: 100% !important;
-    padding: 0.75rem 1rem;
-    border: 1px solid #ccc;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-    box-sizing: border-box;
-  }
-  #btn-manual {
-    width: 100% !important;
-    margin-top: 0.5rem;
-    padding: 0.75rem;
-    background-color: var(--primary);
-    color: var(--blanco);
-    border: none;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-    cursor: pointer;
-    transition: filter 0.2s;
-  }
+.busqueda-manual {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+#manual-id {
+  flex: 1;  /* 📏 El input se expande y ocupa todo el espacio restante */
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+#btn-manual {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--primary);
+  color: var(--blanco);
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: filter 0.2s;
+  white-space: nowrap;
+}
   #btn-manual:hover {
     filter: brightness(1.1);
   }
