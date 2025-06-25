@@ -1,6 +1,6 @@
 from datetime import datetime
 from database.connection import Session
-from database.models import Pedido
+from database.models import Pedido, WsItem
 
 def add_order_if_not_exists(detalle):
     session = Session()
@@ -85,4 +85,7 @@ def get_all_pedidos(order_id=None, shipment_id=None, date_from=None, date_to=Non
         "usuario_armado": r.usuario_armado,
         "usuario_despacho": r.usuario_despacho
     } for r in rows]
+
+def buscar_item_cache_por_sku(db: Session, sku: str):
+    return db.query(WsItem).filter(WsItem.item_code == sku).first()
 

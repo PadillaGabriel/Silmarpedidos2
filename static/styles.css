@@ -1226,3 +1226,130 @@ ul.config-list li {
   }
 }
 
+#reader {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(0,0,0,0.2);
+}
+
+#reader__camera_view {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+}
+#reader video {
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 3 / 4 !important;
+  object-fit: cover !important;
+  border-radius: 12px;
+}
+
+
+
+@media (max-width: 600px) {
+  .detalle-card {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .detalle-card .detalle-titulo {
+    font-weight: bold;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+  }
+
+  .detalle-card .detalle-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .detalle-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+
+  .detalle-card .info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .detalle-card .info div {
+    margin-bottom: 0.25rem;
+  }
+}
+@media (max-width: 600px) {
+  .detalle-card {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1rem;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9rem;
+  }
+
+  .detalle-card img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+  }
+
+  .detalle-card .detalle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .detalle-card .detalle-titulo {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+    color: var(--primary);
+  }
+}
+
+
+.detalle-card img {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+}
+/* Mostrar solo en escritorio */
+.desktop-only {
+  display: table;
+}
+.mobile-only {
+  display: none;
+}
+
+/* Mostrar solo en mobile */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+}

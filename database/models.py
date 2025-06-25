@@ -46,3 +46,11 @@ class ChecklistItem(Base):
     marcado = Column(Boolean, default=False)
     usuario = Column(String, nullable=True)
     fecha_marcado = Column(DateTime, server_default=func.now())
+
+class WsItem(Base):
+    __tablename__ = "ws_items_cache"
+
+    item_id = Column(String, primary_key=True)
+    item_code = Column(String, index=True)
+    item_vendorCode = Column("item_vendorcode", String)  # 👈 mapeo correcto
+    actualizado = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

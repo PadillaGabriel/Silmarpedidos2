@@ -1,3 +1,4 @@
+
 import logging
 import os
 import requests
@@ -16,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from database.models import Base
 from database.init import init_db
+from ws.items import buscar_item_por_sku
 from crud.usuarios import get_user_by_username, create_user
 from crud.pedidos import (
     add_order_if_not_exists,
@@ -25,13 +27,20 @@ from crud.pedidos import (
     get_estado_envio
 )
 
-
+from sqlalchemy.engine.url import make_url
+from crud.pedidos import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
 from api_ml import get_order_details
+from ws.catalogo import  actualizar_ws_items
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+url = make_url(DATABASE_URL)
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if url.drivername.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -47,6 +56,8 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+
+        
 @app.on_event("startup")
 def startup():
     try:
@@ -93,7 +104,29 @@ async def login_post(request: Request, username: str = Form(...), password: str 
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=302)
+def obtener_info_adicional_por_sku(sku, db: Session):
+    try:
+        item = buscar_item_cache_por_sku(db, sku)
+        if item:
+            return {
+                "codigo_proveedor": item.item_vendorCode,
+                "codigo_alfa": item.item_code
+            }
+    except Exception as e:
+        print("❌ Error buscando en cache:", e)
+    return {"codigo_proveedor": None, "codigo_alfa": None}
 
+@app.get("/actualizar-cache-ws", response_class=JSONResponse)
+async def actualizar_cache_ws(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        actualizar_ws_items(db)
+        return {"success": True, "mensaje": "Catálogo actualizado correctamente desde WS"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+        
 @app.get("/configuracion", response_class=HTMLResponse)
 async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
     logisticas = get_all_logisticas()
@@ -125,11 +158,24 @@ async def escanear_get(request: Request, current_user: dict = Depends(get_curren
     return templates.TemplateResponse("escanear.html", {"request": request, "usuario": current_user["username"]})
 
 @app.post("/escanear", response_class=JSONResponse)
-async def escanear_post(request: Request, order_id: str = Form(None), shipment_id: str = Form(None), current_user: dict = Depends(get_current_user)):
+async def escanear_post(request: Request, order_id: str = Form(None),
+                         shipment_id: str = Form(None),
+                           current_user: dict = Depends(get_current_user),
+                           db: Session = Depends(get_db)):
+
     detalle = get_order_details(order_id=order_id, shipment_id=shipment_id)
     if detalle.get("cliente") == "Error" or not detalle.get("items"):
         return {"success": False, "error": "Pedido Cancelado"}
 
+    # 🔍 Enriquecer los ítems con datos del Web Service
+    for item in detalle.get("items", []):
+        sku = item.get("sku")
+        if sku:
+            info_extra = obtener_info_adicional_por_sku(sku, db)  # 👈 PASÁ db AQUÍ
+            item["codigo_proveedor"] = info_extra["codigo_proveedor"]
+            item["codigo_alfa"] = info_extra["codigo_alfa"]
+
+    # Verificación del estado del envío en ML
     token = os.getenv("ML_ACCESS_TOKEN")
     if token:
         url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
@@ -140,11 +186,13 @@ async def escanear_post(request: Request, order_id: str = Form(None), shipment_i
             if data.get("status") == "cancelled":
                 return {"success": False, "error": "El pedido fue cancelado. No puede armarse."}
 
+    # Agregar a la tabla local si no existe
     if not any(p["shipment_id"] == shipment_id for p in get_all_pedidos(shipment_id=shipment_id)):
         primer_oid = detalle.get("primer_order_id")
         if primer_oid:
             mini = [{"order_id": primer_oid, "titulo": i["titulo"], "cantidad": i["cantidad"], "shipment_id": shipment_id} for i in detalle["items"]]
             add_order_if_not_exists({"cliente": detalle["cliente"], "items": mini})
+
     return {"success": True, "detalle": detalle}
 
 @app.post("/decode-qr", response_class=JSONResponse)
@@ -270,7 +318,3 @@ async def despachar_post(
 
     ok = marcar_pedido_despachado(id_buscar, logistica, tipo_envio, usuario)
     return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
-
-
-
-

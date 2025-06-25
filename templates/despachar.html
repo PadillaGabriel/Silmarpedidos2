@@ -33,7 +33,7 @@
       <h3>Detalle del Pedido</h3>
       <p><strong>Cliente:</strong> <span id="cliente"></span></p>
       <p><strong>Estado del Envío:</strong> <span id="estado_envio"></span></p>
-      <table class="detail-table">
+      <table class="detail-table desktop-only">
         <thead>
           <tr>
             <th style="text-align:left; padding:0.5rem;">Imagen</th>
@@ -45,6 +45,7 @@
         </thead>
         <tbody id="tabla-items-despachar"></tbody>
       </table>
+      <div id="cards-items-despachar" class="mobile-only"></div>
       <hr class="section-divider" />
 
       <form id="despachar-form" method="post" action="/despachar">
@@ -111,7 +112,7 @@ async function iniciarEscaneo() {
   try {
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
+      { fps: 10, qrbox: { width: 220, height: 220 }},
       async (decodedText) => {
         console.log("✅ QR leído:", decodedText);
         await detenerEscaneo();
@@ -127,6 +128,7 @@ async function iniciarEscaneo() {
     console.error("❌ Error iniciando escaneo:", err);
     escaneoActivo = false;  // 🔁 revertir si falló
   }
+  
 }
 async function detenerEscaneo() {
   if (scanner) {
@@ -147,39 +149,62 @@ async function detenerEscaneo() {
 }
 
 
-  function mostrarDetalle(detalle) {
-    document.getElementById("cliente").innerText = detalle.cliente;
-    document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
+function mostrarDetalle(detalle) {
+  document.getElementById("cliente").innerText = detalle.cliente;
+  document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
 
-    const tabla = document.getElementById("tabla-items-despachar");
-    tabla.innerHTML = "";
-    detalle.items.forEach(item => {
-      const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
-        ? item.imagenes[0].thumbnail
-        : "https://via.placeholder.com/150";
-      const row = document.createElement("tr");
-      row.innerHTML = `
-      
+  const tabla = document.getElementById("tabla-items-despachar");
+  const cards = document.getElementById("cards-items-despachar");
+  tabla.innerHTML = "";
+  cards.innerHTML = "";
 
-        <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
-          <img src="${imgUrl}" width="80" style="border-radius:4px;">
-        </td>
-        <td style="padding:0.5rem; border-bottom:1px solid #eee;">
-  ${item.permalink
-    ? `<a href="${item.permalink}" target="_blank" style="text-decoration:none; color:#007bff;">${item.titulo}</a>`
-    : item.titulo}
-</td>
-        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku}</td>
-        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
-        <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
-      `;
-      tabla.appendChild(row);
-    });
-    ultimoOrderId = detalle.primer_order_id || "";
-    document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
-    document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
-    document.getElementById("detalle-pedido").style.display = "block";
-  }
+  detalle.items.forEach(item => {
+    const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
+      ? item.imagenes[0].thumbnail
+      : "https://via.placeholder.com/150";
+
+    // 🖥 Tabla (desktop)
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
+        <img src="${imgUrl}" width="80" style="border-radius:4px;">
+      </td>
+      <td style="padding:0.5rem; border-bottom:1px solid #eee;">
+        ${item.permalink
+          ? `<a href="${item.permalink}" target="_blank" style="text-decoration:none; color:#007bff;">${item.titulo}</a>`
+          : item.titulo}
+      </td>
+      <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.sku}</td>
+      <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
+      <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
+    `;
+    tabla.appendChild(row);
+
+    // 📱 Tarjeta (mobile)
+    const card = document.createElement("div");
+    card.className = "detalle-card";
+    card.innerHTML = `
+      <div class="detalle-titulo">${item.titulo}</div>
+      <img src="${imgUrl}" alt="Imagen del producto">
+      <div class="detalle-info">
+        <div><strong>SKU:</strong> ${item.sku}</div>
+        <div><strong>Variante:</strong> ${item.variante}</div>
+        <div><strong>Cantidad:</strong> ${item.cantidad}</div>
+        ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="margin-top:0.5rem; display:inline-block; color:#007bff;">Ver publicación</a>` : ""}
+      </div>
+    `;
+    cards.appendChild(card);
+  });
+
+  // Actualizar IDs ocultos
+  ultimoOrderId = detalle.primer_order_id || "";
+  document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
+  document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
+
+  // Mostrar sección
+  document.getElementById("detalle-pedido").style.display = "block";
+}
+
 
 async function escanear(raw) {
   console.log("🔍 Llamado a escanear() con:", raw); // ✅
