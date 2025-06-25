@@ -7,7 +7,7 @@
       <h2>Escanear Pedido</h2>
 
       <div id="reader-container" style="display:flex; justify-content:center; margin:1rem auto;">
-        <div id="reader" style="width:100%; max-width:360px; aspect-ratio:4/3; border:1px solid #ccc; border-radius:8px;"></div>
+        <div id="reader" style="width: 100%; max-width: 400px; margin: auto;"></div>
       </div>
       <button id="stop-btn" class="btn btn-primary" style="display:block; margin:0 auto;">
         Detener escaneo
@@ -100,16 +100,25 @@ async function iniciarEscaneo() {
   if (!scanner) scanner = new Html5Qrcode("reader");
   escaneoActivo = true;
   try {
-    await scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 300, height: 360 } },
-      async decodedText => {
-        console.log("✅ QR leído:", decodedText);
-        await detenerEscaneo();
-        await escanear(decodedText);
-      },
-      () => {}
-    );
+await scanner.start(
+  { facingMode: "environment" },
+  {
+    fps: 10,
+    qrbox: { width: 300, height: 360 },
+    rememberLastUsedCamera: true,
+    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+  },
+  async decodedText => {
+    console.log("✅ QR leído:", decodedText);
+    await detenerEscaneo();
+    await escanear(decodedText);
+  },
+  errorMessage => {
+    // podés comentar este log si molesta
+    // console.warn("No detectado:", errorMessage);
+  }
+);
+
     document.getElementById("stop-btn").innerText = "Detener escaneo";
   } catch (err) {
     console.error("❌ Error iniciando escaneo:", err);
