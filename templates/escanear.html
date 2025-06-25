@@ -45,7 +45,6 @@
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Título</th>
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">SKU</th>
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Alfa</th>
-      <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Proveedor</th>
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Cantidad</th>
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Variante</th>
       <th style="padding:0.5rem; border-bottom:1px solid #ccc;">Checklist</th>
@@ -197,7 +196,6 @@ function renderDetalle(detalle) {
       <img src="${imgUrl}" alt="Imagen del producto">
       <div class="detalle-info">
         <div><strong>SKU:</strong> ${item.sku}</div>
-        <div><strong>Alfa:</strong> ${item.codigo_alfa || "-"}</div>
         <div><strong>Proveedor:</strong> ${item.codigo_proveedor || "-"}</div>
         <div><strong>Cantidad:</strong> ${item.cantidad}</div>
         <div><strong>Variante:</strong> ${item.variante || "-"}</div>
@@ -220,7 +218,6 @@ function renderDetalle(detalle) {
       <td><img src="${imgUrl}" style="width:60px; border-radius:4px;"></td>
       <td>${item.titulo}</td>
       <td>${item.sku}</td>
-      <td>${item.codigo_alfa || "-"}</td>
       <td>${item.codigo_proveedor || "-"}</td>
       <td>${item.cantidad}</td>
       <td>${item.variante || "-"}</td>
@@ -235,9 +232,17 @@ function renderDetalle(detalle) {
   });
 
   // Activar validación
-  document.querySelectorAll(".check-item").forEach(input => {
-    input.addEventListener("change", validarChecklist);
+document.querySelectorAll(".check-item").forEach(input => {
+  input.addEventListener("change", () => {
+    const shipmentId = document.getElementById("shipment_id_hidden").value;
+    const itemId = input.dataset.itemId;
+    const variationId = input.dataset.variationId || "";
+    const marcado = input.checked;
+
+    guardarChecklist(shipmentId, itemId, variationId, marcado);
+    validarChecklist();
   });
+});
 
   document.getElementById("boton-armar").style.display = "block";
   validarChecklist();
