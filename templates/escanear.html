@@ -214,7 +214,6 @@ function renderDetalle(detalle) {
           <label>
             <input type="checkbox" class="check-item"
               data-item-id="${item.item_id}"
-              data-variation-id="${item.variation_id || ''}"
               data-sku="${item.sku || ''}">
             Marcar como armado
           </label>
@@ -239,7 +238,6 @@ function renderDetalle(detalle) {
       <td>
         <input type="checkbox" class="check-item"
           data-item-id="${item.item_id}"
-          data-variation-id="${item.variation_id || ''}"
           data-sku="${item.sku || ''}">
       </td>
     `;
@@ -251,17 +249,16 @@ document.querySelectorAll(".check-item").forEach(input => {
   input.addEventListener("change", () => {
     const shipmentId = document.getElementById("shipment_id_hidden").value;
     const itemId = input.dataset.itemId;
-    const variationId = input.dataset.variationId || "";
     const marcado = input.checked;
 
     // 🔄 Sincronizar con el otro checkbox del mismo ítem
-    document.querySelectorAll(`.check-item[data-item-id="${itemId}"][data-variation-id="${variationId}"]`).forEach(other => {
+    document.querySelectorAll(`.check-item[data-item-id="${itemId}"]`).forEach(other => {
       if (other !== input) {
         other.checked = marcado;
       }
     });
 
-    guardarChecklist(shipmentId, itemId, variationId, marcado);
+    guardarChecklist(shipmentId, itemId, marcado);
     validarChecklist();
   });
 });
@@ -280,11 +277,10 @@ function validarChecklist() {
 }
 
 // Guardar checklist parcial
-function guardarChecklist(shipmentId, itemId, variationId, marcado) {
+function guardarChecklist(shipmentId, itemId, marcado) {
   const f = new FormData();
   f.append("shipment_id", shipmentId);
   f.append("item_id", itemId);
-  f.append("variation_id", variationId);
   f.append("marcado", marcado);
 
   fetch("/checklist", {
