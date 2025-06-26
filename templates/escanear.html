@@ -186,7 +186,7 @@ function renderDetalle(detalle) {
   const cards = document.getElementById("cards-items-despachar");
   tabla.innerHTML = "";
   cards.innerHTML = "";
-  
+
   document.getElementById("shipment_id_hidden").value = detalle.primer_shipment_id || "";
   document.getElementById("cliente").innerText = detalle.cliente || "-";
   document.getElementById("estado_envio").innerText = detalle.estado_envio || "-";
@@ -197,7 +197,7 @@ function renderDetalle(detalle) {
       ? (item.imagenes[0].secure_url || item.imagenes[0].url || item.imagenes[0].thumbnail)
       : "https://via.placeholder.com/300";
 
-    // ✅ Tarjeta (mobile)
+    // Tarjeta (mobile)
     const card = document.createElement("div");
     card.className = "detalle-card";
     card.innerHTML = `
@@ -222,7 +222,7 @@ function renderDetalle(detalle) {
     `;
     cards.appendChild(card);
 
-    // ✅ Fila de tabla (desktop)
+    // Fila de tabla (desktop)
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>
@@ -244,27 +244,39 @@ function renderDetalle(detalle) {
     tabla.appendChild(row);
   });
 
-  // Activar validación
-document.querySelectorAll(".check-item").forEach(input => {
-  input.addEventListener("change", () => {
-    const shipmentId = document.getElementById("shipment_id_hidden").value;
-    const itemId = input.dataset.itemId;
-    const marcado = input.checked;
+  // Guardar estado de los checkbox sin validar
+  document.querySelectorAll(".check-item").forEach(input => {
+    input.addEventListener("change", () => {
+      const shipmentId = document.getElementById("shipment_id_hidden").value;
+      const itemId = input.dataset.itemId;
+      const marcado = input.checked;
 
-    // 🔄 Sincronizar con el otro checkbox del mismo ítem
-    document.querySelectorAll(`.check-item[data-item-id="${itemId}"]`).forEach(other => {
-      if (other !== input) {
-        other.checked = marcado;
-      }
+      // sincronizar todos los check con mismo item_id
+      document.querySelectorAll(`.check-item[data-item-id="${itemId}"]`).forEach(other => {
+        if (other !== input) other.checked = marcado;
+      });
+
+      guardarChecklist(shipmentId, itemId, marcado);
     });
-
-    guardarChecklist(shipmentId, itemId, marcado);
-    validarChecklist();
   });
-});
 
   document.getElementById("boton-armar").style.display = "block";
-  validarChecklist();
+  document.getElementById("boton-armar").disabled = false; // 🔓 Siempre habilitado
+}
+
+function guardarChecklist(shipmentId, itemId, marcado) {
+  const f = new FormData();
+  f.append("shipment_id", shipmentId);
+  f.append("item_id", itemId);
+  f.append("marcado", marcado);
+
+  fetch("/checklist", {
+    method: "POST",
+    body: f,
+    credentials: "include"
+  }).then(r => r.json()).then(d => {
+    if (!d.success) console.warn("❌ Checklist error:", d.error);
+  });
 }
 
 

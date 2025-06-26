@@ -238,10 +238,6 @@ async def armar_post(
     if estado_actual == "despachado":
         return {"success": False, "error": "Este pedido ya fue despachado. No se puede volver a armar."}
 
-    # Validar checklist completo
-    if not checklist_completo(db, id_buscar):
-        return {"success": False, "error": "Faltan productos por marcar. No se puede armar el pedido."}
-
     # Marcar como armado
     ok = marcar_envio_armado(id_buscar, usuario)
     return {"success": ok, "error": None if ok else "No se pudo marcar como armado"}
