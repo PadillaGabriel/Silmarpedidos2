@@ -11,20 +11,19 @@ def checklist_completo(session, shipment_id: str) -> bool:
             print("❌ Detalle vacío o sin ítems")
             return False
 
-        cantidad_total = len(detalle["items"])
+        # Contar cuántos item_id distintos hay
+        item_ids = {item.get("item_id") for item in detalle["items"] if item.get("item_id")}
+        cantidad_total = len(item_ids)
 
+        # Contar marcados en DB por item_id
         cantidad_marcados = session.query(ChecklistItem).filter_by(
             shipment_id=shipment_id,
             marcado=True
-        ).count()
+        ).distinct(ChecklistItem.item_id).count()
 
-        print(f"✅ Ítems distintos requeridos: {cantidad_total} | Ítems marcados: {cantidad_marcados}")
+        print(f"✅ Ítems únicos requeridos: {cantidad_total} | Ítems marcados: {cantidad_marcados}")
 
         return cantidad_marcados >= cantidad_total
-
-    except Exception as e:
-        print(f"❌ Error en checklist_completo: {e}")
-        return False
 
     except Exception as e:
         print(f"❌ Error en checklist_completo: {e}")
