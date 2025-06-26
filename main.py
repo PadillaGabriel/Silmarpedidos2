@@ -250,7 +250,6 @@ async def armar_post(
 async def marcar_checklist(
     shipment_id: str = Form(...),
     item_id: str = Form(...),
-    variation_id: str = Form(...),
     marcado: bool = Form(...),
     db: Session = Depends(get_db)
 ):
@@ -258,15 +257,13 @@ async def marcar_checklist(
         from database.models import ChecklistItem
         item = db.query(ChecklistItem).filter_by(
             shipment_id=shipment_id,
-            item_id=item_id,
-            variation_id=variation_id
+            item_id=item_id
         ).first()
 
         if not item:
             item = ChecklistItem(
                 shipment_id=shipment_id,
                 item_id=item_id,
-                variation_id=variation_id,
                 marcado=marcado
             )
             db.add(item)
