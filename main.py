@@ -288,7 +288,7 @@ async def despachar_post(
     logistica: str = Form(...),
     tipo_envio: str = Form(...),
     current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)  # 👈 ESTA LÍNEA ES LA CLAVE
+    db: Session = Depends(get_db)
 ):
     usuario = current_user["username"]
     id_buscar = shipment_id or order_id
@@ -306,8 +306,6 @@ async def despachar_post(
             if data.get("status") == "cancelled":
                 return {"success": False, "error": "El pedido fue cancelado. No puede despacharse."}
 
-    if not checklist_completo(db, id_buscar):
-        return {"success": False, "error": "No se puede despachar. El pedido no está armado correctamente."}
-
+    # ✅ Ya no se valida checklist
     ok = marcar_pedido_despachado(id_buscar, logistica, tipo_envio, usuario)
     return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
