@@ -186,11 +186,11 @@ function renderDetalle(detalle) {
   const cards = document.getElementById("cards-items-despachar");
   tabla.innerHTML = "";
   cards.innerHTML = "";
-
+  
+  document.getElementById("shipment_id_hidden").value = detalle.primer_shipment_id || "";
   document.getElementById("cliente").innerText = detalle.cliente || "-";
   document.getElementById("estado_envio").innerText = detalle.estado_envio || "-";
   document.getElementById("detalle-pedido").style.display = "block";
-  document.getElementById("shipment_id_hidden").value = detalle.primer_shipment_id || "";
 
   detalle.items.forEach(item => {
     const imgUrl = (Array.isArray(item.imagenes) && item.imagenes.length)

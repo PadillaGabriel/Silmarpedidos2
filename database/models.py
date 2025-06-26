@@ -36,16 +36,12 @@ class Logistica(Base):
     nombre = Column(String(100), unique=True, nullable=False)
 
 class ChecklistItem(Base):
-    __tablename__ = "checklist"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    __tablename__ = "checklist_items"
+    id = Column(Integer, primary_key=True)
     shipment_id = Column(String, nullable=False)
     item_id = Column(String, nullable=False)
-    variation_id = Column(String, nullable=True)
-    sku = Column(String, nullable=True)
     marcado = Column(Boolean, default=False)
-    usuario = Column(String, nullable=True)
-    fecha_marcado = Column(DateTime, server_default=func.now())
+    creado = Column(DateTime, default=datetime.utcnow)
 
 class WsItem(Base):
     __tablename__ = "ws_items_cache"
