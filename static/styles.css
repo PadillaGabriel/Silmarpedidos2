@@ -1,486 +1,475 @@
 /* =====================
    Variables y resets
    ===================== */
-   :root {
-    --primary: #0a273f;
-    --light-bg: #f5f5f5;
-    --card-bg: #ffffff;
-    --card-shadow: rgba(0, 0, 0, 0.05);
-    --text-main: #333333;
-    --text-light: #666666;
-    --border-radius: 8px;
-    --spacing: 16px;
-    --transition: 0.2s ease-in-out;
-  }
-  
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  
-  body {
-    font-family: "Segoe UI", Roboto, sans-serif;
-    background: var(--light-bg);
-    color: var(--text-main);
-    line-height: 1.5;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  
-  /* =====================
+:root {
+  --primary: #0a273f;
+  --light-bg: #f5f5f5;
+  --card-bg: #ffffff;
+  --card-shadow: rgba(0, 0, 0, 0.05);
+  --text-main: #333333;
+  --text-light: #666666;
+  --border-radius: 8px;
+  --spacing: 16px;
+  --transition: 0.2s ease-in-out;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background: var(--light-bg);
+  color: var(--text-main);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* =====================
      Header (GLOBAL)
      ===================== */
-  header {
-    background: var(--primary);
-    color: white;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--spacing) calc(var(--spacing) * 2);
-  }
-  
-  header h1 {
-    display: flex;
-    align-items: center;
-    color: white;
-  }
-  
-  .header-logo {
-    height: 32px;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-  }
-  
-  header .logo {
-    font-size: 1.5rem;
-    font-weight: bold;
-    text-decoration: none;
-    color: white;
-  }
-  
-  header nav {
-    display: flex;
-    gap: var(--spacing);
-  }
-  
-  header nav a {
-    color: white;
-    text-decoration: none;
-    font-weight: 500;
-    transition: opacity var(--transition);
-  }
-  
-  header nav a:hover {
-    opacity: 0.8;
-  }
-  
-  /* =====================
+header {
+  background: var(--primary);
+  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing) calc(var(--spacing) * 2);
+}
+
+header h1 {
+  display: flex;
+  align-items: center;
+  color: white;
+}
+
+.header-logo {
+  height: 32px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+header .logo {
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-decoration: none;
+  color: white;
+}
+
+header nav {
+  display: flex;
+  gap: var(--spacing);
+}
+
+header nav a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity var(--transition);
+}
+
+header nav a:hover {
+  opacity: 0.8;
+}
+
+/* =====================
      Layout general
      ===================== */
+main {
+  flex: 1;
+  max-width: 900px;
+  margin: var(--spacing) auto;
+  padding: 0 var(--spacing);
+}
+
+footer {
+  text-align: center;
+  padding: var(--spacing);
+  background: #e0e0e0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+/* =====================
+     Botones
+     ===================== */
+.btn {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.75em 1.5em;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: filter var(--transition);
+  text-align: center;
+  text-decoration: none;
+}
+
+.btn:hover {
+  filter: brightness(1.1);
+}
+
+.btn-primary {
+  background: var(--primary);
+}
+
+.btn-secondary {
+  background: #888888;
+}
+
+/* =====================
+     Tarjetas
+     ===================== */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px var(--card-shadow);
+  padding: var(--spacing);
+  margin-bottom: var(--spacing);
+}
+
+.card-title {
+  font-size: 1.25rem;
+  margin-bottom: var(--spacing);
+  color: var(--primary);
+}
+
+/* =====================
+     Inputs / Selects
+     ===================== */
+.input,
+.text-input,
+.file-input,
+.select-input {
+  width: 100%;
+  max-width: 300px;
+  padding: 0.5em;
+  margin-top: 0.5em;
+  margin-bottom: var(--spacing);
+  border: 1px solid #ccc;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border var(--transition);
+}
+
+.input:focus,
+.text-input:focus,
+.file-input:focus,
+.select-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* =====================
+     Formularios inline
+     ===================== */
+.form-group-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+
+/* =====================
+     Divider entre secciones
+     ===================== */
+.divider {
+  font-weight: 500;
+  margin-top: var(--spacing);
+  margin-bottom: 0.5em;
+  color: var(--text-light);
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 0.25em;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: var(--spacing) 0;
+}
+
+/* =====================
+     Tablas base
+     ===================== */
+.detail-table,
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing);
+}
+
+.detail-table th,
+.detail-table td,
+.history-table th,
+.history-table td {
+  padding: 0.75em;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 0.95rem;
+}
+
+.detail-table th,
+.history-table thead th {
+  background: var(--light-bg);
+  color: var(--text-light);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.detail-table tr:nth-child(even) td,
+.history-table tbody tr:nth-child(even) td {
+  background: var(--card-bg);
+}
+
+.detail-table .no-results,
+.history-table .no-results {
+  text-align: center;
+  color: var(--text-light);
+}
+
+/* =====================
+     Pantalla de inicio
+     ===================== */
+.page-title {
+  text-align: center;
+  margin-bottom: var(--spacing);
+  font-size: 2rem;
+  color: var(--primary);
+}
+
+.home-buttons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing);
+  margin-top: var(--spacing);
+}
+
+.home-buttons .btn {
+  width: auto;
+  min-width: 160px;
+}
+
+/* =====================
+     Form filtros
+     ===================== */
+.form-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing);
+  margin-bottom: var(--spacing);
+  align-items: flex-end;
+}
+
+.form-filters>div {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-filters .filter-button {
+  margin-left: auto;
+}
+
+.form-filters-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-filters-inline .small {
+  padding: 0.4em 0.6em;
+  font-size: 0.85rem;
+}
+
+.form-filters-inline .text-input.small,
+.form-filters-inline .select-input.small {
+  width: auto;
+  min-width: 100px;
+}
+
+.form-filters-inline .btn.small {
+  white-space: nowrap;
+  margin-left: 1rem;
+}
+
+/* =====================
+     Contenedor de tablas con scroll
+     ===================== */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: var(--spacing);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* =====================
+     Imágenes y SVG fluidos
+     ===================== */
+img,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* =====================
+     Mostrar/ocultar según tamaño
+     ===================== */
+.desktop-only {
+  display: block;
+}
+
+.mobile-only {
+  display: none;
+}
+
+/* =====================
+     Ajustes para móvil (max-width: 600px)
+     ===================== */
+@media (max-width: 600px) {
+
+  /* Header y navegación */
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--spacing);
+  }
+
+  header .logo {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  header nav {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 0.5rem;
+  }
+
+  header nav a {
+    flex: 0 0 auto;
+    margin: 0 0.75rem 0 0;
+    font-size: 0.9rem;
+    padding: 0.25em 0;
+  }
+
+  /* Contenedor principal */
   main {
-    flex: 1;
-    max-width: 900px;
+    max-width: calc(100vw - 2 * var(--spacing));
     margin: var(--spacing) auto;
     padding: 0 var(--spacing);
   }
-  
-  footer {
-    text-align: center;
-    padding: var(--spacing);
-    background: #e0e0e0;
-    color: var(--text-light);
-    font-size: 0.9rem;
-  }
-  
-  /* =====================
-     Botones
-     ===================== */
+
+  /* Botones */
   .btn {
-    display: inline-block;
-    background: var(--primary);
-    color: white;
-    border: none;
-    padding: 0.75em 1.5em;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-    cursor: pointer;
-    transition: filter var(--transition);
-    text-align: center;
-    text-decoration: none; 
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
   }
-  
-  .btn:hover {
-    filter: brightness(1.1);
+
+  .home-buttons .btn {
+    min-width: 0;
+    width: 100%;
   }
-  
-  .btn-primary {
-    background: var(--primary);
-  }
-  
-  .btn-secondary {
-    background: #888888;
-  }
-  
-  /* =====================
-     Tarjetas
-     ===================== */
+
+  /* Tarjetas */
   .card {
-    background: var(--card-bg);
-    border-radius: var(--border-radius);
-    box-shadow: 0 2px 8px var(--card-shadow);
-    padding: var(--spacing);
+    padding: 0.75rem;
     margin-bottom: var(--spacing);
   }
-  
+
   .card-title {
-    font-size: 1.25rem;
-    margin-bottom: var(--spacing);
-    color: var(--primary);
+    font-size: 1rem;
   }
-  
-  /* =====================
-     Inputs / Selects
-     ===================== */
+
+  /* Inputs, selects y QR */
   .input,
   .text-input,
   .file-input,
-  .select-input {
-    width: 100%;
-    max-width: 300px;
-    padding: 0.5em;
-    margin-top: 0.5em;
-    margin-bottom: var(--spacing);
-    border: 1px solid #ccc;
-    border-radius: var(--border-radius);
-    font-size: 1rem;
-    transition: border var(--transition);
+  .select-input,
+
+
+  /* Títulos */
+  .page-title {
+    font-size: 1.5rem;
   }
-  
-  .input:focus,
-  .text-input:focus,
-  .file-input:focus,
-  .select-input:focus {
-    outline: none;
-    border-color: var(--primary);
+
+  /* Footer */
+  footer {
+    padding: var(--spacing) 0.5rem;
+    font-size: 0.8rem;
   }
-  
-  /* =====================
-     Formularios inline
-     ===================== */
+
+  /* Formularios inline */
   .form-group-inline {
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
+    flex-direction: column;
+    align-items: stretch;
   }
-  
-  /* =====================
-     Scanner (QR)
-     ===================== */
-  .qr-reader {
-    position: relative;
-    width: 100%;
-    max-width: 480px;
-    margin: var(--spacing) auto;
-    border: 1px solid #ddd;
-    border-radius: var(--border-radius);
-    overflow: hidden;
-  }
-  
-  .qr-reader::before {
-    content: "";
-    display: block;
-    padding-top: 100%;
-  }
-  
-  .qr-reader video,
-  .qr-reader canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  
-  /* =====================
-     Divider entre secciones
-     ===================== */
-  .divider {
-    font-weight: 500;
-    margin-top: var(--spacing);
-    margin-bottom: 0.5em;
-    color: var(--text-light);
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 0.25em;
-  }
-  
-  .section-divider {
-    border: none;
-    border-top: 1px solid #eee;
-    margin: var(--spacing) 0;
-  }
-  
-  /* =====================
-     Tablas base
-     ===================== */
-  .detail-table,
-  .history-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: var(--spacing);
-  }
-  
+
+  /* Tablas (detalle e historial) */
   .detail-table th,
   .detail-table td,
   .history-table th,
   .history-table td {
-    padding: 0.75em;
-    text-align: left;
-    border-bottom: 1px solid #e0e0e0;
-    white-space: normal;
-    word-break: break-word;
-    font-size: 0.95rem;
-  }
-  
-  .detail-table th,
-  .history-table thead th {
-    background: var(--light-bg);
-    color: var(--text-light);
-    position: sticky;
-    top: 0;
-    z-index: 2;
-  }
-  
-  .detail-table tr:nth-child(even) td,
-  .history-table tbody tr:nth-child(even) td {
-    background: var(--card-bg);
-  }
-  
-  .detail-table .no-results,
-  .history-table .no-results {
-    text-align: center;
-    color: var(--text-light);
-  }
-  
-  /* =====================
-     Pantalla de inicio
-     ===================== */
-  .page-title {
-    text-align: center;
-    margin-bottom: var(--spacing);
-    font-size: 2rem;
-    color: var(--primary);
-  }
-  
-  .home-buttons {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--spacing);
-    margin-top: var(--spacing);
-  }
-  
-  .home-buttons .btn {
-    width: auto;
-    min-width: 160px;
-  }
-  
-  /* =====================
-     Form filtros
-     ===================== */
-  .form-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing);
-    margin-bottom: var(--spacing);
-    align-items: flex-end;
-  }
-  
-  .form-filters > div {
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .form-filters .filter-button {
-    margin-left: auto;
-  }
-  
-  .form-filters-inline {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  
-  .form-filters-inline .small {
-    padding: 0.4em 0.6em;
-    font-size: 0.85rem;
-  }
-  
-  .form-filters-inline .text-input.small,
-  .form-filters-inline .select-input.small {
-    width: auto;
-    min-width: 100px;
-  }
-  
-  .form-filters-inline .btn.small {
     white-space: nowrap;
-    margin-left: 1rem;
+    font-size: 0.85rem;
+    padding: 0.5em;
   }
-    
-  /* =====================
-     Contenedor de tablas con scroll
-     ===================== */
-  .table-responsive {
-    width: 100%;
-    overflow-x: auto;
-    margin-top: var(--spacing);
-    -webkit-overflow-scrolling: touch;
+
+  /* Divider adicional entre secciones */
+  .section-divider {
+    margin: var(--spacing) 0;
   }
-  
-  /* =====================
-     Imágenes y SVG fluidos
-     ===================== */
-  img,
-  svg {
-    max-width: 100%;
-    height: auto;
-  }
-  
-  /* =====================
-     Mostrar/ocultar según tamaño
-     ===================== */
+
+  /* Mostrar cards de historial */
   .desktop-only {
-    display: block;
-  }
-  
-  .mobile-only {
     display: none;
   }
-  
-  /* =====================
-     Ajustes para móvil (max-width: 600px)
-     ===================== */
-  @media (max-width: 600px) {
-    /* Header y navegación */
-    header {
-      flex-direction: column;
-      align-items: flex-start;
-      padding: var(--spacing);
-    }
-    header .logo {
-      font-size: 1.25rem;
-      margin-bottom: 0.5rem;
-    }
-    header nav {
-      width: 100%;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      margin-top: 0.5rem;
-    }
-    header nav a {
-      flex: 0 0 auto;
-      margin: 0 0.75rem 0 0;
-      font-size: 0.9rem;
-      padding: 0.25em 0;
-    }
-  
-    /* Contenedor principal */
-    main {
-      max-width: calc(100vw - 2 * var(--spacing));
-      margin: var(--spacing) auto;
-      padding: 0 var(--spacing);
-    }
-  
-    /* Botones */
-    .btn {
-      width: 100%;
-      padding: 1rem;
-      font-size: 1.1rem;
-    }
-    .home-buttons .btn {
-      min-width: 0;
-      width: 100%;
-    }
-  
-    /* Tarjetas */
-    .card {
-      padding: 0.75rem;
-      margin-bottom: var(--spacing);
-    }
-    .card-title {
-      font-size: 1rem;
-    }
-  
-    /* Inputs, selects y QR */
-    .input,
-    .text-input,
-    .file-input,
-    .select-input,
-    .qr-reader {
-      max-width: 100%;
-    }
-  
-    /* Títulos */
-    .page-title {
-      font-size: 1.5rem;
-    }
-  
-    /* Footer */
-    footer {
-      padding: var(--spacing) 0.5rem;
-      font-size: 0.8rem;
-    }
-  
-    /* Formularios inline */
-    .form-group-inline {
-      flex-direction: column;
-      align-items: stretch;
-    }
-  
-    /* Tablas (detalle e historial) */
-    .detail-table th,
-    .detail-table td,
-    .history-table th,
-    .history-table td {
-      white-space: nowrap;
-      font-size: 0.85rem;
-      padding: 0.5em;
-    }
-  
-    /* Divider adicional entre secciones */
-    .section-divider {
-      margin: var(--spacing) 0;
-    }
-  
-    /* Mostrar cards de historial */
-    .desktop-only {
-      display: none;
-    }
-    .mobile-only {
-      display: block;
-    }
-    .history-card {
-      margin-bottom: var(--spacing);
-      padding: var(--spacing);
-    }
-  }
-  /* =====================
-   Mostrar/ocultar según tamaño (GLOBAL)
-   ===================== */
-.desktop-only { display: block !important; }
-.mobile-only  { display: none  !important; }
 
-@media (max-width: 600px) {
-  .desktop-only { display: none  !important; }
-  .mobile-only  { display: block !important; }
+  .mobile-only {
+    display: block;
+  }
+
+  .history-card {
+    margin-bottom: var(--spacing);
+    padding: var(--spacing);
+  }
 }
 
-  /* =============================
+/* =====================
+   Mostrar/ocultar según tamaño (GLOBAL)
+   ===================== */
+.desktop-only {
+  display: block !important;
+}
+
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  .mobile-only {
+    display: block !important;
+  }
+}
+
+/* =============================
    Filtros Historial Responsivos
    ============================= */
 .form-filters-inline {
@@ -494,7 +483,8 @@
 .form-filters-inline .filter {
   display: flex;
   flex-direction: column;
-  flex: 1 1 120px;       /* crece, encoge, base 120px */
+  flex: 1 1 120px;
+  /* crece, encoge, base 120px */
   min-width: 90px;
 }
 
@@ -520,54 +510,61 @@
   .form-filters-inline {
     flex-direction: column;
   }
+
   .form-filters-inline .filter {
-    flex: 1 1 100%;      /* ocupan todo el ancho */
+    flex: 1 1 100%;
+    /* ocupan todo el ancho */
     margin-bottom: var(--spacing);
   }
+
   .form-filters-inline .filter--button {
-    align-self: stretch;  /* botón al 100% */
+    align-self: stretch;
+    /* botón al 100% */
   }
 }
+
 /* =============================
    Filtros Historial – Layout Grid
    ============================= */
-   .form-filters-inline {
-    display: grid;
-    /* 4 columnas: cada filtro 1fr (mínimo 120px), y el botón ajusta su ancho */
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) auto;
-    gap: 0.5rem 1rem;            /* 0.5rem vertical, 1rem horizontal */
-    align-items: end;            /* etiquetas e inputs alineados abajo */
-    margin-bottom: var(--spacing);
+.form-filters-inline {
+  display: grid;
+  /* 4 columnas: cada filtro 1fr (mínimo 120px), y el botón ajusta su ancho */
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) auto;
+  gap: 0.5rem 1rem;
+  /* 0.5rem vertical, 1rem horizontal */
+  align-items: end;
+  /* etiquetas e inputs alineados abajo */
+  margin-bottom: var(--spacing);
+}
+
+/* Quitar márgenes extra de cada "filter" */
+.form-filters-inline .filter {
+  margin: 0;
+}
+
+/* Labels con poco espacio y tamaño discreto */
+.form-filters-inline .filter label {
+  margin-bottom: 0.8rem;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+/* Ajuste botón para quedar alineado arriba, sin margen extra */
+.form-filters-inline .filter--button {
+  align-self: start;
+  margin: 0.2rem 1 2 5rem;
+}
+
+/* Para móviles, volvemos a una sola columna */
+@media (max-width: 600px) {
+  .form-filters-inline {
+    grid-template-columns: 1fr;
+    gap: var(--spacing);
+    margin: 0.2rem 1 2 5rem;
   }
-  
-  /* Quitar márgenes extra de cada "filter" */
-  .form-filters-inline .filter {
-    margin: 0;
-  }
-  
-  /* Labels con poco espacio y tamaño discreto */
-  .form-filters-inline .filter label {
-    margin-bottom: 0.8rem;
-    font-size: 0.85rem;
-    color: var(--text-main);
-  }
-  
-  /* Ajuste botón para quedar alineado arriba, sin margen extra */
-  .form-filters-inline .filter--button {
-    align-self: start;
-    margin: 0.2rem 1 2 5rem;  
-  }
-  
-  /* Para móviles, volvemos a una sola columna */
-  @media (max-width: 600px) {
-    .form-filters-inline {
-      grid-template-columns: 1fr;
-      gap: var(--spacing);
-      margin: 0.2rem 1 2 5rem; 
-    }
-  }
-  
-  /* =============================
+}
+
+/* =============================
    Encabezado y filtros responsivos
    ============================= */
 .card-header-filters {
@@ -587,14 +584,16 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.5rem 1rem;      /* 0.5rem entre filas, 1rem entre columnas */
+  gap: 0.5rem 1rem;
+  /* 0.5rem entre filas, 1rem entre columnas */
   flex: 1 1 auto;
 }
 
 .form-filters-inline .filter {
   display: flex;
   flex-direction: column;
-  flex: 0 1 160px;       /* ancho base 160px, crece o encoge */
+  flex: 0 1 160px;
+  /* ancho base 160px, crece o encoge */
   min-width: 120px;
 }
 
@@ -604,100 +603,111 @@
 }
 
 .form-filters-inline .filter--button {
-  align-self: flex-start;  /* botón al final de la fila */
+  align-self: flex-start;
+  /* botón al final de la fila */
 }
 
 /* =============================
    Ajustes finales – Filtros
    ============================= */
-   .card-header-filters {
-    /* Título + form en la misma línea */
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--spacing);
-  }
-  
-  .card-header-filters h2 {
-    margin: 0;
-    flex: 0 0 auto;
-  }
-  
-  .form-filters-inline {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1rem;       /* 0.5rem filas, 1rem columnas */
-    align-items: flex-end;
-    flex: 1 1 auto;
-  }
-  
-  /* Cada filtro ocupa un “slot” mínimo */
-  .form-filters-inline .filter {
-    flex: 0 1 150px;        /* base 150px, crece o encoge */
-    min-width: 120px;
-  }
-  
-  /* Botón siempre al final y a la derecha */
-  .form-filters-inline .filter--button {
-    order: 999;             /* lo último */
-    flex: 0 1 auto;
-    align-self: flex-start;
-    margin-left: auto;
-  }
-  
-  /* =============================
+.card-header-filters {
+  /* Título + form en la misma línea */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing);
+}
+
+.card-header-filters h2 {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.form-filters-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  /* 0.5rem filas, 1rem columnas */
+  align-items: flex-end;
+  flex: 1 1 auto;
+}
+
+/* Cada filtro ocupa un “slot” mínimo */
+.form-filters-inline .filter {
+  flex: 0 1 150px;
+  /* base 150px, crece o encoge */
+  min-width: 120px;
+}
+
+/* Botón siempre al final y a la derecha */
+.form-filters-inline .filter--button {
+  order: 999;
+  /* lo último */
+  flex: 0 1 auto;
+  align-self: flex-start;
+  margin-left: auto;
+}
+
+/* =============================
      Versión móvil (<600px)
      ============================= */
-  @media (max-width: 600px) {
-    .card-header-filters {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .form-filters-inline {
-      flex-direction: column;
-      gap: var(--spacing);
-    }
-    .form-filters-inline .filter,
-    .form-filters-inline .filter--button {
-      flex: 1 1 100%;
-      margin: 0;
-    }
-    .form-filters-inline .filter--button {
-      align-self: center;   /* botón centrado */
-      margin-top: 0.5rem;
-    }
+@media (max-width: 600px) {
+  .card-header-filters {
+    flex-direction: column;
+    align-items: stretch;
   }
-  
 
-  @media (max-width: 600px) {
-    /* Asegura que el header de filtros ocupe todo el ancho y alinee a la izquierda */
-    .card-header-filters {
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-  
-    /* El form de filtros en columna, items estirados al 100% */
-    .form-filters-inline {
-      flex-direction: column !important;
-      align-items: stretch !important;  /* ¡Aquí estaba el problema! */
-      gap: var(--spacing);
-    }
-  
-    /* Cada filtro ocupa todo el ancho interno */
-    .form-filters-inline .filter,
-    .form-filters-inline .filter--button {
-      width: 100% !important;
-      margin: 0 !important;
-    }
-  
-    /* Si quieres el botón centrado, déjalo así,
-       o cámbialo a flex-start para que quede a la izquierda */
-    .form-filters-inline .filter--button {
-      align-self: center !important; /* o flex-start */
-      margin-top: 0.5rem !important;
-    }
+  .form-filters-inline {
+    flex-direction: column;
+    gap: var(--spacing);
   }
+
+  .form-filters-inline .filter,
+  .form-filters-inline .filter--button {
+    flex: 1 1 100%;
+    margin: 0;
+  }
+
+  .form-filters-inline .filter--button {
+    align-self: center;
+    /* botón centrado */
+    margin-top: 0.5rem;
+  }
+}
+
+
+@media (max-width: 600px) {
+
+  /* Asegura que el header de filtros ocupe todo el ancho y alinee a la izquierda */
+  .card-header-filters {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* El form de filtros en columna, items estirados al 100% */
+  .form-filters-inline {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    /* ¡Aquí estaba el problema! */
+    gap: var(--spacing);
+  }
+
+  /* Cada filtro ocupa todo el ancho interno */
+  .form-filters-inline .filter,
+  .form-filters-inline .filter--button {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* Si quieres el botón centrado, déjalo así,
+       o cámbialo a flex-start para que quede a la izquierda */
+  .form-filters-inline .filter--button {
+    align-self: center !important;
+    /* o flex-start */
+    margin-top: 0.5rem !important;
+  }
+}
 
 /* static/styles.css */
 
@@ -870,7 +880,8 @@ input[type="text"]:focus {
 }
 
 .btn-primary:hover {
-  background-color: #081e2f; /* variante más oscura de --primary */
+  background-color: #081e2f;
+  /* variante más oscura de --primary */
 }
 
 /* Lista de logísticas */
@@ -1071,6 +1082,7 @@ ul.config-list li {
 
 /* Ajustes generales para móviles */
 @media (max-width: 768px) {
+
   /* Secciones centradas ocupen 100% con padding */
   section.config-section,
   section.auth-section {
@@ -1146,16 +1158,13 @@ ul.config-list li {
    ============================= */
 
 @media (max-width: 768px) {
+
   /* Contenedor principal en Escanear y Despachar */
   section {
     padding: 0 1rem;
   }
 
-  /* Ajustar lector de QR para ocupar todo ancho */
-  #reader {
-    width: 100% !important;
-    height: auto !important;
-  }
+
 
   /* Botón “Detener escaneo” y “Reanudar escaneo” */
   #stop-btn {
@@ -1171,33 +1180,35 @@ ul.config-list li {
   }
 
   /* Ajustar celda de ID manual y botón “Buscar” */
-.busqueda-manual {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  margin-top: 1rem;
-}
+  .busqueda-manual {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 1rem;
+  }
 
-#manual-id {
-  flex: 1;  /* 📏 El input se expande y ocupa todo el espacio restante */
-  padding: 0.75rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: var(--border-radius);
-  font-size: 1rem;
-  box-sizing: border-box;
-}
+  #manual-id {
+    flex: 1;
+    /* 📏 El input se expande y ocupa todo el espacio restante */
+    padding: 0.75rem 1rem;
+    border: 1px solid #ccc;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    box-sizing: border-box;
+  }
 
-#btn-manual {
-  padding: 0.75rem 1.25rem;
-  background-color: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--border-radius);
-  font-size: 1rem;
-  cursor: pointer;
-  transition: filter 0.2s;
-  white-space: nowrap;
-}
+  #btn-manual {
+    padding: 0.75rem 1.25rem;
+    background-color: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: filter 0.2s;
+    white-space: nowrap;
+  }
+
   #btn-manual:hover {
     filter: brightness(1.1);
   }
@@ -1208,10 +1219,12 @@ ul.config-list li {
     flex-direction: column;
     gap: 1rem;
   }
+
   #despachar-form select,
   #despachar-form button {
     width: 100% !important;
   }
+
   #despachar-form label {
     margin-bottom: 0.25rem;
   }
@@ -1223,6 +1236,7 @@ ul.config-list li {
    ============================= */
 
 @media (max-width: 768px) {
+
   /* Suponiendo que los botones de inicio usan clase .btn-inicio */
   .btn-inicio {
     width: auto;
@@ -1234,33 +1248,39 @@ ul.config-list li {
 }
 
 #reader {
+  position: relative;
   width: 100%;
   max-width: 360px;
-  aspect-ratio: 3 / 4;
-  border-radius: 12px;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
-  box-shadow: 0 0 8px rgba(0,0,0,0.2);
+  border-radius: 12px;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
 }
 
-#reader__camera_view {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 12px;
-}
+/* Estilo de la cámara */
 #reader video {
   width: 100% !important;
   height: 100% !important;
-  aspect-ratio: 3 / 4 !important;
   object-fit: cover !important;
   border-radius: 12px;
 }
+
+/* Marco tipo visor */
 #reader__scan_region {
+  position: absolute;
+  top: 40px;
+  left: 70px;
+  right: 70px;
+  bottom: 40px;
   border: 2px dashed #00c853;
   border-radius: 8px;
   box-shadow: 0 0 20px rgba(0, 200, 83, 0.3);
-  margin: auto;
+  box-sizing: border-box;
+  z-index: 2;
 }
+
+
+
 
 
 
@@ -1308,6 +1328,7 @@ ul.config-list li {
     margin-bottom: 0.25rem;
   }
 }
+
 @media (max-width: 600px) {
   .detalle-card {
     background: var(--card-bg);
@@ -1350,10 +1371,12 @@ ul.config-list li {
   object-fit: cover;
   border-radius: 6px;
 }
+
 /* Mostrar solo en escritorio */
 .desktop-only {
   display: table;
 }
+
 .mobile-only {
   display: none;
 }
@@ -1363,6 +1386,7 @@ ul.config-list li {
   .desktop-only {
     display: none !important;
   }
+
   .mobile-only {
     display: block !important;
   }
@@ -1372,10 +1396,12 @@ ul.config-list li {
   .busqueda-manual {
     flex-wrap: nowrap !important;
   }
+
   #manual-id {
     flex: 1 !important;
     min-width: 0 !important;
   }
+
   #btn-manual {
     width: auto !important;
     flex-shrink: 0 !important;

@@ -3,6 +3,12 @@
 import json
 import logging
 import requests
+import aiohttp
+import asyncio
+from sqlalchemy.orm import Session
+from crud.pedidos import buscar_item_cache_por_sku 
+from database.models import WsItem
+from database.models import MLPedidoCache
 from datetime import datetime, timedelta
 
 # Configuración
@@ -155,64 +161,60 @@ def parse_order_data(order_data: dict) -> dict:
 
     return {"cliente": cliente, "items": items}
 
-def get_order_details(order_id: str = None, shipment_id: str = None) -> dict:
-    """
-    Flujo completo:
-      1) Si me mandan order_id: hago GET /orders/{order_id} y devuelvo parse_order_data + primer_order_id=order_id.
-      2) Si me mandan shipment_id: hago GET /shipments/{shipment_id}/items (with x-format-new: true)
-         -> eso me devuelve un array de entradas, cada una con item_id, variation_id, quantity, order_id, ...
-         Luego, para cada entry hago GET /orders/{order_id} y filtro únicamente el ítem que coincida
-         con item_id+variation_id, acumulándolo en all_items. El primer order_id que encuentre lo guardo en primer_oid.
-    """
+async def get_order_details(order_id: str = None, shipment_id: str = None, db: Session = None) -> dict:
     token = get_valid_token()
     if not token:
         logger.error("No se obtuvo token válido")
         return {"cliente": "Error", "items": [], "primer_order_id": None}
 
-    common_headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}"}
+    TTL_MINUTOS = 10
 
-    # ------------------------------ 1) Búsqueda directa por order_id ------------------------------
+    # 1️⃣ BUSCAR EN CACHE
+    if db and shipment_id:
+        cache = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).first()
+        if cache:
+            if cache.fecha_consulta and datetime.utcnow() - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
+                logger.info("Se usó cache fresca para shipment_id=%s", shipment_id)
+                return {
+                    "cliente": cache.cliente,
+                    "items": cache.detalle,
+                    "estado_envio": cache.estado_envio,
+                    "estado_ml": cache.estado_ml,
+                    "primer_order_id": cache.order_id,
+                    "primer_shipment_id": cache.shipment_id,
+                }
+            else:
+                logger.info("Cache expirada para shipment_id=%s, se consultará la API", shipment_id)
+
+    # 2️⃣ ORDER_ID DIRECTO
     if order_id:
         try:
-            od = fetch_api(f"/orders/{order_id}", extra_headers=common_headers)
+            od = fetch_api(f"/orders/{order_id}", extra_headers=headers)
             parsed = parse_order_data(od)
-            # Como vinimos con order_id directo, devolvemos ese mismo como primer_order_id:
             parsed["primer_order_id"] = order_id
             return parsed
         except Exception as e:
             logger.warning("/orders/%s devolvió error: %s", order_id, e)
 
-    # ------------------------------ 2) Si vino shipment_id → /shipments/{shipment_id}/items ------------------------------
+    # 3️⃣ SHIPMENT_ID FLUJO COMPLETO
     if shipment_id:
         try:
             shipment_items = fetch_api(
                 f"/shipments/{shipment_id}/items",
-                extra_headers={**common_headers, "x-format-new": "true"}
+                extra_headers={**headers, "x-format-new": "true"}
             )
-            # Ahora shipment_items debería ser una lista de objetos:
-            # [
-            #   {
-            #     "item_id": "MLA1703763596",
-            #     "variation_id": 186044755919,
-            #     "quantity": 1,
-            #     "order_id": "2000011777021922",
-            #     "user_product_id": "MLAU2759307141",
-            #     "description": "Mesa Bandeja ...",
-            #     ...
-            #   },
-            #   { ... segunda entrada ... }
-            # ]
+
             try:
-                shipment_data = fetch_api(f"/shipments/{shipment_id}", extra_headers=common_headers)
+                shipment_data = fetch_api(f"/shipments/{shipment_id}", extra_headers=headers)
                 shipment_status = shipment_data.get("status", "desconocido")
             except Exception as e:
                 logger.warning("No se pudo obtener el estado del envío: %s", e)
                 shipment_status = "desconocido"
 
-                #  Traducción a español
             estado_traducido = {
                 "pending": "Pendiente",
-                "ready_to_ship": "Listo para enviar",
+                "ready_to_ship": "Listo para armar",
                 "shipped": "Enviado",
                 "delivered": "Entregado",
                 "not_delivered": "No entregado",
@@ -221,81 +223,139 @@ def get_order_details(order_id: str = None, shipment_id: str = None) -> dict:
             }
             estado_envio = estado_traducido.get(shipment_status, shipment_status.capitalize())
 
-            if not isinstance(shipment_items, list) or len(shipment_items) == 0:
+            if not isinstance(shipment_items, list) or not shipment_items:
                 logger.error("No hay shipping_items para shipment_id=%s", shipment_id)
                 return {"cliente": "Error", "items": [], "primer_order_id": None, "shipment_status": shipment_status}
 
-
-            all_items  = []
-            cliente    = None
+            all_items = []
+            cliente = None
             primer_oid = None
 
-            # Para cada entry en shipment_items pedimos la orden y filtramos el item correspondiente
-            for idx, entry in enumerate(shipment_items):
+            for entry in shipment_items:
                 oid = entry.get("order_id")
                 if not oid:
                     continue
-
-                # Guardamos el primer order_id que aparezca en el array
                 if primer_oid is None:
                     primer_oid = oid
 
-                # Pedimos el JSON completo de la order
                 try:
-                    od = fetch_api(f"/orders/{oid}", extra_headers=common_headers)
+                    od = fetch_api(f"/orders/{oid}", extra_headers=headers)
                 except Exception as e:
                     logger.warning("/orders/%s devolvió error: %s", oid, e)
                     continue
 
-                # Cliente: solo lo asignamos la primera vez
                 if cliente is None:
                     cliente = od.get("buyer", {}).get("nickname", "Cliente desconocido")
 
-                # Buscamos en od["order_items"] el item cuyo id y variation_id coincidan con la entry
                 for oi in od.get("order_items", []):
                     prod = oi.get("item", oi)
-                    if (
-                        prod.get("id") == entry.get("item_id")
-                        and prod.get("variation_id") == entry.get("variation_id")
-                    ):
-                        # Reconstruimos un mini-JSON con esa sola línea
+                    if prod.get("id") == entry.get("item_id") and prod.get("variation_id") == entry.get("variation_id"):
                         temp_order = {
-                            "buyer":      od.get("buyer", {}),
+                            "buyer": od.get("buyer", {}),
                             "order_items": [oi]
                         }
                         detalle_unico = parse_order_data(temp_order)
-                        # Enriquecer cada ítem con permalink
-                    for item in detalle_unico.get("items", []):
-                        item_id = entry.get("item_id")
-                        try:
-                            item_data = fetch_api(f"/items/{item_id}", extra_headers=common_headers)
-                            item["permalink"] = item_data.get("permalink")
-                        except Exception as e:
-                            logger.warning("No se pudo obtener permalink de item_id=%s: %s", item_id, e)
-
-                        # parse_order_data(…) nos devuelve:
-                        # { "cliente": "...", "items": [ {titulo, sku, variante, cantidad, imagenes}, … ] }
                         if detalle_unico.get("items"):
                             all_items.extend(detalle_unico["items"])
                         break
 
-            if all_items:
-                 return {
-                "cliente": cliente or "Cliente desconocido",
-                "items": all_items,
-                "primer_order_id": primer_oid,
-                "shipment_status": shipment_status,  # ← este es el que te falta
-                "estado_envio": estado_envio
-            }
+            # 🔁 Agregamos permalinks en paralelo
+            await enriquecer_permalinks(all_items, token, db)
 
+            if all_items:
+                resultado = {
+                    "cliente": cliente or "Cliente desconocido",
+                    "items": all_items,
+                    "primer_order_id": primer_oid,
+                    "primer_shipment_id": shipment_id,
+                    "estado_ml": shipment_status,
+                    "estado_envio": estado_envio,
+                }
+
+                if db:
+                    nuevo = MLPedidoCache(
+                        shipment_id=shipment_id,
+                        order_id=primer_oid,
+                        cliente=cliente,
+                        estado_envio=estado_envio,
+                        estado_ml=shipment_status,
+                        detalle=all_items
+                    )
+                    db.merge(nuevo)
+                    db.commit()
+
+                return resultado
 
             logger.error("No se obtuvieron ítems tras procesar shipment_id=%s", shipment_id)
+
         except Exception as e:
             logger.warning("Error procesando /shipments/%s/items: %s", shipment_id, e)
 
-    # ------------------------------ 3) Fallback: no se encontró order ni shipment válido ------------------------------
-    logger.error(
-        "No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)",
-        order_id, shipment_id
-    )
+    logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
     return {"cliente": "Error", "items": [], "primer_order_id": None}
+
+async def fetch_item_permalink(session, item_id, token, db):
+    url = f"https://api.mercadolibre.com/items/{item_id}"
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        async with session.get(url, headers=headers) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                permalink = data.get("permalink")
+
+                # Guardar en cache si existe el item
+                item_db = db.query(WsItem).filter_by(item_id=item_id).first()
+                if item_db:
+                    item_db.permalink = permalink
+                    item_db.actualizado = datetime.utcnow()
+                else:
+                    item_db = WsItem(
+                        item_id=item_id,
+                        permalink=permalink,
+                        actualizado=datetime.utcnow()
+                    )
+                    db.add(item_db)
+                db.commit()
+
+                return item_id, permalink
+    except Exception as e:
+        logger.warning("Error al consultar item_id=%s: %s", item_id, e)
+    return item_id, None
+    
+async def enriquecer_permalinks(items: list, token: str, db: Session):
+    async with aiohttp.ClientSession() as session:
+        tareas = []
+        for item in items:
+            item_id = item.get("item_id")
+            if item_id:
+                tareas.append(fetch_item_permalink(session, item_id, token, db))
+
+        resultados = await asyncio.gather(*tareas)
+
+        # Asignar resultados a los items originales
+        permalink_map = {item_id: permalink for item_id, permalink in resultados}
+        for item in items:
+            item_id = item.get("item_id")
+            item["permalink"] = permalink_map.get(item_id)
+
+
+async def enriquecer_items_ws(items: list, db: Session):
+    sku_cache = {}
+
+    async def enriquecer(item):
+        sku = str(item.get("sku", "")).strip()
+        if not sku:
+            return
+        if sku in sku_cache:
+            info = sku_cache[sku]
+        else:
+            info = await asyncio.to_thread(buscar_item_cache_por_sku, db , sku)
+            sku_cache[sku] = info
+
+        if info:
+            item["codigo_proveedor"] = info.item_vendorcode
+            item["codigo_alfa"] = info.codigo_alfa
+        else:
+            logger.warning("No se encontró item con SKU=%s", sku)
+
+    await asyncio.gather(*(enriquecer(item) for item in items))

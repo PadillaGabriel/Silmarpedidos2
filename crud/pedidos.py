@@ -1,4 +1,6 @@
 from datetime import datetime
+from database.models import MLPedidoCache
+from sqlalchemy.dialects.postgresql import JSONB
 from database.connection import Session
 from database.models import Pedido, WsItem
 
@@ -88,4 +90,23 @@ def get_all_pedidos(order_id=None, shipment_id=None, date_from=None, date_to=Non
 
 def buscar_item_cache_por_sku(db: Session, sku: str):
     return db.query(WsItem).filter(WsItem.item_code == sku).first()
+
+def limpiar_cache_antiguo(db: Session, dias: int = 30):
+    from datetime import datetime, timedelta
+    limite = datetime.now() - timedelta(days=dias)
+    db.query(MLPedidoCache).filter(MLPedidoCache.fecha_consulta < limite).delete()
+    db.commit()
+
+def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: str, estado_envio: str, estado_ml: str, detalle: dict):
+    cache = MLPedidoCache(
+        shipment_id=shipment_id,
+        order_id=order_id,
+        cliente=cliente,
+        estado_envio=estado_envio,
+        estado_ml=estado_ml,
+        detalle=detalle
+    )
+    db.merge(cache)  # actualiza si existe
+    db.commit()
+
 

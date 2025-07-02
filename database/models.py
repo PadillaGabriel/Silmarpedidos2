@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, UniqueConstraint, Boolean, func
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, UniqueConstraint, Boolean, func, JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 
@@ -35,18 +35,22 @@ class Logistica(Base):
     id = Column(Integer, primary_key=True)
     nombre = Column(String(100), unique=True, nullable=False)
 
-class ChecklistItem(Base):
-    __tablename__ = "checklist_items"
-    id = Column(Integer, primary_key=True)
-    shipment_id = Column(String, nullable=False)
-    item_id = Column(String, nullable=False)
-    marcado = Column(Boolean, default=False)
-    creado = Column(DateTime, default=datetime.utcnow)
-
 class WsItem(Base):
     __tablename__ = "ws_items_cache"
 
     item_id = Column(String, primary_key=True)
     item_code = Column(String, index=True)
-    item_vendorCode = Column("item_vendorcode", String)  # 👈 mapeo correcto
+    item_vendorCode = Column("item_vendorcode", String)
+    permalink = Column(String, nullable=True)  # 👈 NUEVO
     actualizado = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class MLPedidoCache(Base):
+    __tablename__ = "ml_pedidos_cache"
+
+    shipment_id = Column(String, primary_key=True, index=True)
+    order_id = Column(String, nullable=True)
+    cliente = Column(String, nullable=True)
+    estado_envio = Column(String, nullable=True)
+    estado_ml = Column(String, nullable=True)
+    detalle = Column(JSON, nullable=True)
+    fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())

@@ -8,7 +8,7 @@
     <div class="card-body">
       <h2>Despachar Pedido</h2>
       <div id="reader-container" style="display:flex; justify-content:center; margin-top:1rem;">
-        <div id="reader" style="width:400px; height:300px;"></div>
+        <div id="reader" style="width:320; height:240;"></div>
       </div>
       <div style="text-align:center; margin-top:0.5rem;">
         <button id="stop-btn" class="btn">Detener escaneo</button>
@@ -18,10 +18,7 @@
       <input type="file" id="input-escanear" accept="image/*" class="mt-1"><br><br>
       <p><strong>O ingresá el ID manualmente:</strong></p>
       <div style="display:flex; align-items:center;">
-        <input
-          type="text"
-          id="manual-id"
-          placeholder="Ingresar ID de pedido"
+        <input type="text" id="manual-id" placeholder="Ingresar ID de pedido"
           style="flex:1; padding:0.5rem; border:1px solid #ccc; border-radius:4px;">
         <button class="btn" id="btn-manual" style="margin-left:1rem;">Buscar</button>
       </div>
@@ -56,7 +53,7 @@
           <select id="logistica" name="logistica" required>
             <option value="" disabled selected>Seleccione una logística</option>
             {% for l in logisticas %}
-              <option value="{{ l }}">{{ l }}</option>
+            <option value="{{ l }}">{{ l }}</option>
             {% endfor %}
           </select>
         </div>
@@ -88,84 +85,85 @@
   let ultimoOrderId = "";
   let ultimoShipId = "";
 
-function mostrarToastError(mensaje) {
-  const toast = document.getElementById("toast-alert");
-  const body = document.getElementById("toast-body");
-  body.innerText = mensaje;
+  function mostrarToastError(mensaje) {
+    const toast = document.getElementById("toast-alert");
+    const body = document.getElementById("toast-body");
+    body.innerText = mensaje;
 
-  toast.classList.add("show");
-}
-
-function ocultarToast() {
-  const toast = document.getElementById("toast-alert");
-  toast.classList.remove("show");
-}
-
-
-
-async function iniciarEscaneo() {
-  if (!scanner) {
-    scanner = new Html5Qrcode("reader");
+    toast.classList.add("show");
   }
 
-  escaneoActivo = true;  // 👈 Lo movemos arriba para evitar clicks rápidos que fallan
-  try {
-    await scanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 220, height: 220 }},
-      async (decodedText) => {
-        console.log("✅ QR leído:", decodedText);
-        await detenerEscaneo();
-        await escanear(decodedText);
-      },
-      (errorMessage) => {
-        // Lecturas fallidas silenciosas
-      }
-    );
-    document.getElementById("stop-btn").innerText = "Detener escaneo";
-    console.log("🎥 Escaneo iniciado");
-  } catch (err) {
-    console.error("❌ Error iniciando escaneo:", err);
-    escaneoActivo = false;  // 🔁 revertir si falló
+  function ocultarToast() {
+    const toast = document.getElementById("toast-alert");
+    toast.classList.remove("show");
   }
-  
-}
-async function detenerEscaneo() {
-  if (scanner) {
-    const estado = await scanner.getState();
-    console.log("📡 Estado del escáner:", estado);
 
-    if (estado === Html5QrcodeScannerState.SCANNING || estado === "SCANNING") {
-      try {
-        await scanner.stop();
-        escaneoActivo = false;
-        document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
-        console.log("📴 Escaneo detenido correctamente");
-      } catch (err) {
-        console.error("❌ Error al detener escaneo:", err);
+
+
+  async function iniciarEscaneo() {
+
+    if (!scanner) {
+      scanner = new Html5Qrcode("reader");
+    }
+
+    escaneoActivo = true;  // 👈 Lo movemos arriba para evitar clicks rápidos que fallan
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        async (decodedText) => {
+          console.log("✅ QR leído:", decodedText);
+          await detenerEscaneo();
+          await escanear(decodedText);
+        },
+        (errorMessage) => {
+          // Lecturas fallidas silenciosas
+        }
+      );
+      document.getElementById("stop-btn").innerText = "Detener escaneo";
+      console.log("🎥 Escaneo iniciado");
+    } catch (err) {
+      console.error("❌ Error iniciando escaneo:", err);
+      escaneoActivo = false;  // 🔁 revertir si falló
+    }
+  }
+
+  async function detenerEscaneo() {
+    if (scanner) {
+      const estado = await scanner.getState();
+      console.log("📡 Estado del escáner:", estado);
+
+      if (estado === Html5QrcodeScannerState.SCANNING || estado === "SCANNING") {
+        try {
+          await scanner.stop();
+          escaneoActivo = false;
+          document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
+          console.log("📴 Escaneo detenido correctamente");
+        } catch (err) {
+          console.error("❌ Error al detener escaneo:", err);
+        }
       }
     }
   }
-}
 
 
-function mostrarDetalle(detalle) {
-  document.getElementById("cliente").innerText = detalle.cliente;
-  document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
+  function mostrarDetalle(detalle) {
+    document.getElementById("cliente").innerText = detalle.cliente;
+    document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
 
-  const tabla = document.getElementById("tabla-items-despachar");
-  const cards = document.getElementById("cards-items-despachar");
-  tabla.innerHTML = "";
-  cards.innerHTML = "";
+    const tabla = document.getElementById("tabla-items-despachar");
+    const cards = document.getElementById("cards-items-despachar");
+    tabla.innerHTML = "";
+    cards.innerHTML = "";
 
-  detalle.items.forEach(item => {
-    const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
-      ? item.imagenes[0].thumbnail
-      : "https://via.placeholder.com/150";
+    detalle.items.forEach(item => {
+      const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
+        ? item.imagenes[0].thumbnail
+        : "https://via.placeholder.com/150";
 
-    // 🖥 Tabla (desktop)
-    const row = document.createElement("tr");
-    row.innerHTML = `
+      // 🖥 Tabla (desktop)
+      const row = document.createElement("tr");
+      row.innerHTML = `
       <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
         <img src="${imgUrl}" width="80" style="border-radius:4px;">
       </td>
@@ -178,12 +176,12 @@ function mostrarDetalle(detalle) {
       <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
       <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
     `;
-    tabla.appendChild(row);
+      tabla.appendChild(row);
 
-    // 📱 Tarjeta (mobile)
-    const card = document.createElement("div");
-    card.className = "detalle-card";
-    card.innerHTML = `
+      // 📱 Tarjeta (mobile)
+      const card = document.createElement("div");
+      card.className = "detalle-card";
+      card.innerHTML = `
       <div class="detalle-titulo">${item.titulo}</div>
       <img src="${imgUrl}" alt="Imagen del producto">
       <div class="detalle-info">
@@ -193,108 +191,108 @@ function mostrarDetalle(detalle) {
         ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="margin-top:0.5rem; display:inline-block; color:#007bff;">Ver publicación</a>` : ""}
       </div>
     `;
-    cards.appendChild(card);
-  });
-
-  // Actualizar IDs ocultos
-  ultimoOrderId = detalle.primer_order_id || "";
-  document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
-  document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
-
-  // Mostrar sección
-  document.getElementById("detalle-pedido").style.display = "block";
-}
-
-
-async function escanear(raw) {
-  console.log("🔍 Llamado a escanear() con:", raw); // ✅
-  let shipmentVal;
-  try {
-    const obj = JSON.parse(raw);
-    shipmentVal = obj.id;
-  } catch {
-    shipmentVal = raw;
-  }
-  console.log("📦 shipment_id:", shipmentVal);
-
-  ultimoShipId = shipmentVal;
-  document.getElementById("shipment_id_hidden").value = shipmentVal;
-
-  const form = new FormData();
-  form.append("shipment_id", shipmentVal);
-
-  try {
-    const res = await fetch("/escanear", {
-      method: "POST",
-      body: form
+      cards.appendChild(card);
     });
-    const data = await res.json();
-    console.log("📥 Respuesta de /escanear:", data); // ✅
 
-    if (data.success) {
-      mostrarDetalle(data.detalle);
-    } else {
-      mostrarToastError(data.error || "No se pudo obtener el pedido.");
+    // Actualizar IDs ocultos
+    ultimoOrderId = detalle.primer_order_id || "";
+    document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
+    document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
+
+    // Mostrar sección
+    document.getElementById("detalle-pedido").style.display = "block";
+  }
+
+
+  async function escanear(raw) {
+    console.log("🔍 Llamado a escanear() con:", raw); // ✅
+    let shipmentVal;
+    try {
+      const obj = JSON.parse(raw);
+      shipmentVal = obj.id;
+    } catch {
+      shipmentVal = raw;
     }
-  } catch (e) {
-    console.error("❌ Error al llamar /escanear:", e);
-    mostrarToastError("Error al obtener detalles del pedido.");
-  }
-}
-async function buscarManual() {
-  const id = document.getElementById("manual-id").value.trim();
-  if (!id) {
-    mostrarToastError("Por favor ingresá un ID de envío válido.");
-    return;
-  }
+    console.log("📦 shipment_id:", shipmentVal);
 
-  const form = new FormData();
-  form.append("shipment_id", id);
+    ultimoShipId = shipmentVal;
+    document.getElementById("shipment_id_hidden").value = shipmentVal;
 
-  try {
-    const res = await fetch("/escanear", {
-      method: "POST",
-      body: form,
-      credentials: "include"
-    });
-    const data = await res.json();
-    if (!data.success) {
-      mostrarToastError(data.error || "No se pudo obtener el pedido.");
+    const form = new FormData();
+    form.append("shipment_id", shipmentVal);
+
+    try {
+      const res = await fetch("/escanear", {
+        method: "POST",
+        body: form
+      });
+      const data = await res.json();
+      console.log("📥 Respuesta de /escanear:", data); // ✅
+
+      if (data.success) {
+        mostrarDetalle(data.detalle);
+      } else {
+        mostrarToastError(data.error || "No se pudo obtener el pedido.");
+      }
+    } catch (e) {
+      console.error("❌ Error al llamar /escanear:", e);
+      mostrarToastError("Error al obtener detalles del pedido.");
+    }
+  }
+  async function buscarManual() {
+    const id = document.getElementById("manual-id").value.trim();
+    if (!id) {
+      mostrarToastError("Por favor ingresá un ID de envío válido.");
       return;
     }
 
-    mostrarDetalle(data.detalle);  // ← esta función debe estar definida para renderizar los datos
-  } catch {
-    mostrarToastError("Error al conectar con el servidor.");
+    const form = new FormData();
+    form.append("shipment_id", id);
+
+    try {
+      const res = await fetch("/escanear", {
+        method: "POST",
+        body: form,
+        credentials: "include"
+      });
+      const data = await res.json();
+      if (!data.success) {
+        mostrarToastError(data.error || "No se pudo obtener el pedido.");
+        return;
+      }
+
+      mostrarDetalle(data.detalle);  // ← esta función debe estar definida para renderizar los datos
+    } catch {
+      mostrarToastError("Error al conectar con el servidor.");
+    }
   }
-}
 
 
   window.addEventListener("DOMContentLoaded", () => {
-   iniciarEscaneo()
-document.getElementById("stop-btn").addEventListener("click", async () => {
-  const btn = document.getElementById("stop-btn");
+    iniciarEscaneo()
+    document.getElementById("stop-btn").addEventListener("click", async () => {
+      const btn = document.getElementById("stop-btn");
 
-  if (scanner && escaneoActivo) {
-    try {
-      await scanner.stop();
-      escaneoActivo = false;
-      btn.innerText = "Reiniciar escaneo";
-    } catch (err) {
-      console.error("❌ Error al detener el escáner:", err);
-    }
-  } else {
-    // Limpiar vista antes de reiniciar
-    document.getElementById("detalle-pedido").style.display = "none";
-    document.getElementById("tabla-items-despachar").innerHTML = "";
-    document.getElementById("cliente").innerText = "";
-    document.getElementById("estado_envio").innerText = "";
-    document.getElementById("order_id_hidden").value = "";
-    document.getElementById("shipment_id_hidden").value = "";
+      if (scanner && escaneoActivo) {
+        try {
+          await scanner.stop();
+          escaneoActivo = false;
+          btn.innerText = "Reiniciar escaneo";
+        } catch (err) {
+          console.error("❌ Error al detener el escáner:", err);
+        }
+      } else {
+        // Limpiar vista antes de reiniciar
+        document.getElementById("detalle-pedido").style.display = "none";
+        document.getElementById("tabla-items-despachar").innerHTML = "";
+        document.getElementById("cliente").innerText = "";
+        document.getElementById("estado_envio").innerText = "";
+        document.getElementById("order_id_hidden").value = "";
+        document.getElementById("shipment_id_hidden").value = "";
 
-    iniciarEscaneo();
-  }
-});
+        iniciarEscaneo();
+      }
+    });
     document.getElementById("input-escanear").addEventListener("change", e => {
       if (!e.target.files.length) return;
       const qrImg = new Html5Qrcode("reader");
@@ -309,20 +307,20 @@ document.getElementById("stop-btn").addEventListener("click", async () => {
     document.getElementById("despachar-form").addEventListener("submit", async e => {
       e.preventDefault();
       const formData = new FormData(e.target);
-try {
-  const resp = await fetch("/despachar", {
-    method: "POST",
-    body: formData
-  });
-  const data = await resp.json();
-  if (!data.success) {
-    mostrarToastError(data.error || "Error al despachar.");
-    return;
-  }
-  mostrarToastError(data.mensaje || "Pedido despachado correctamente."); // opcional
-} catch {
-  mostrarToastError("Error al conectar con el servidor.");
-}
+      try {
+        const resp = await fetch("/despachar", {
+          method: "POST",
+          body: formData
+        });
+        const data = await resp.json();
+        if (!data.success) {
+          mostrarToastError(data.error || "Error al despachar.");
+          return;
+        }
+        mostrarToastError(data.mensaje || "Pedido despachado correctamente."); // opcional
+      } catch {
+        mostrarToastError("Error al conectar con el servidor.");
+      }
     });
   });
   document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);

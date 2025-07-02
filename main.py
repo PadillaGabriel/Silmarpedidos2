@@ -2,7 +2,6 @@
 import logging
 import os
 import requests
-from checklist import checklist_completo
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -15,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
-from database.models import Base
+from database.models import Base, MLPedidoCache
 from database.init import init_db
 from ws.items import buscar_item_por_sku
 from crud.usuarios import get_user_by_username, create_user
@@ -30,7 +29,7 @@ from crud.pedidos import (
 from sqlalchemy.engine.url import make_url
 from crud.pedidos import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
-from api_ml import get_order_details
+from api_ml import get_order_details, enriquecer_items_ws
 from ws.catalogo import  actualizar_ws_items
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -158,42 +157,33 @@ async def escanear_get(request: Request, current_user: dict = Depends(get_curren
     return templates.TemplateResponse("escanear.html", {"request": request, "usuario": current_user["username"]})
 
 @app.post("/escanear", response_class=JSONResponse)
-async def escanear_post(request: Request, order_id: str = Form(None),
-                         shipment_id: str = Form(None),
-                           current_user: dict = Depends(get_current_user),
-                           db: Session = Depends(get_db)):
+async def escanear_post(
+    request: Request,
+    order_id: str = Form(None),
+    shipment_id: str = Form(None),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
 
-    detalle = get_order_details(order_id=order_id, shipment_id=shipment_id)
     if detalle.get("cliente") == "Error" or not detalle.get("items"):
         return {"success": False, "error": "Pedido Cancelado"}
 
-    # 🔍 Enriquecer los ítems con datos del Web Service
-    for item in detalle.get("items", []):
-        sku = item.get("sku")
-        if sku:
-            info_extra = obtener_info_adicional_por_sku(sku, db)  # 👈 PASÁ db AQUÍ
-            item["codigo_proveedor"] = info_extra["codigo_proveedor"]
-            item["codigo_alfa"] = info_extra["codigo_alfa"]
+    # 🔧 Enriquecer ítems con datos del Web Service
+    await enriquecer_items_ws(detalle["items"], db)
 
-    # Verificación del estado del envío en ML
-    token = os.getenv("ML_ACCESS_TOKEN")
-    if token:
-        url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            data = r.json()
-            if data.get("status") == "cancelled":
-                return {"success": False, "error": "El pedido fue cancelado. No puede armarse."}
-
-    # Agregar a la tabla local si no existe
+    # 💾 Guardar internamente si no existe
     if not any(p["shipment_id"] == shipment_id for p in get_all_pedidos(shipment_id=shipment_id)):
         primer_oid = detalle.get("primer_order_id")
         if primer_oid:
-            mini = [{"order_id": primer_oid, "titulo": i["titulo"], "cantidad": i["cantidad"], "shipment_id": shipment_id} for i in detalle["items"]]
+            mini = [
+                {"order_id": primer_oid, "titulo": i["titulo"], "cantidad": i["cantidad"], "shipment_id": shipment_id}
+                for i in detalle["items"]
+            ]
             add_order_if_not_exists({"cliente": detalle["cliente"], "items": mini})
 
     return {"success": True, "detalle": detalle}
+
 
 @app.post("/decode-qr", response_class=JSONResponse)
 async def decode_qr(frame: UploadFile = File(...)):
@@ -242,36 +232,6 @@ async def armar_post(
     ok = marcar_envio_armado(id_buscar, usuario)
     return {"success": ok, "error": None if ok else "No se pudo marcar como armado"}
     
-@app.post("/checklist", response_class=JSONResponse)
-async def marcar_checklist(
-    shipment_id: str = Form(...),
-    item_id: str = Form(...),
-    marcado: bool = Form(...),
-    db: Session = Depends(get_db)
-):
-    try:
-        from database.models import ChecklistItem
-        item = db.query(ChecklistItem).filter_by(
-            shipment_id=shipment_id,
-            item_id=item_id
-        ).first()
-
-        if not item:
-            item = ChecklistItem(
-                shipment_id=shipment_id,
-                item_id=item_id,
-                marcado=marcado
-            )
-            db.add(item)
-        else:
-            item.marcado = marcado
-
-        db.commit()
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": f"Error al marcar ítem: {str(e)}"}
-
-
 @app.get("/estado_envio", response_class=JSONResponse)
 def estado_envio(shipment_id: str, current_user: dict = Depends(get_current_user)):
     return {"estado": get_estado_envio(shipment_id)}
