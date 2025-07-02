@@ -343,19 +343,17 @@ async def enriquecer_items_ws(items: list, db: Session):
     sku_cache = {}
 
     async def enriquecer(item):
-        sku = str(item.get("sku", "")).strip()
+        sku = item.get("sku")
         if not sku:
             return
         if sku in sku_cache:
             info = sku_cache[sku]
         else:
-            info = await asyncio.to_thread(buscar_item_cache_por_sku, db , sku)
+            info = await asyncio.to_thread(buscar_item_cache_por_sku, db, sku)
             sku_cache[sku] = info
-
         if info:
             item["codigo_proveedor"] = info.item_vendorcode
-            item["codigo_alfa"] = info.codigo_alfa
-        else:
-            logger.warning("No se encontró item con SKU=%s", sku)
+            item["item_vendorcode"] = info.item_vendorcode  # ✅ opcional si querés mostrar en columna tabla
+            item["codigo_alfa"] = info.item_vendorcode      # ✅ esto evita el error y mantiene compatibilidad visual
 
     await asyncio.gather(*(enriquecer(item) for item in items))

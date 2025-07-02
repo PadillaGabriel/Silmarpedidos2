@@ -40,7 +40,7 @@ class WsItem(Base):
 
     item_id = Column(String, primary_key=True)
     item_code = Column(String, index=True)
-    item_vendorCode = Column("item_vendorcode", String)
+    item_vendorcode = Column("item_vendorcode", String)
     permalink = Column(String, nullable=True)  # 👈 NUEVO
     actualizado = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
