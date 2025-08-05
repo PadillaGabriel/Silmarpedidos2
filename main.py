@@ -34,7 +34,6 @@ from auth_ml import get_ml_token, obtener_token
 
 # CRUD
 from crud.pedidos import (
-    guardar_pedido_en_cache,
     add_order_if_not_exists,
     marcar_envio_armado,
     marcar_pedido_despachado,
