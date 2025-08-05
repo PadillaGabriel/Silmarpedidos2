@@ -4,7 +4,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from database.connection import SessionLocal  # ✅ correcto
 from database.models import Pedido, WsItem
 from sqlalchemy.orm import Session        # ✅ Correcto
-    
+from crud.mercado_libre import enriquecer_permalinks, enriquecer_items_ws
+from utils import parse_order_data
+from auth_ml import get_valid_token
 
 def add_order_if_not_exists(detalle):
     session = SessionLocal()
@@ -112,14 +114,21 @@ def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: 
     db.commit()
 
 
-def guardar_pedido_en_cache(pedido: dict, db: Session):
+async def guardar_pedido_en_cache(pedido: dict, db: Session):
     try:
         order_id = pedido["id"]
         shipment_id = pedido.get("shipping", {}).get("id")
         cliente = pedido.get("buyer", {}).get("nickname", "")
         estado_ml = pedido.get("status", "unknown")
         estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
-        detalle = pedido
+
+        parsed = parse_order_data(pedido)
+        items = parsed.get("items", [])
+
+        # Enriquecer datos como imagen, SKU y Alfa
+        token = get_valid_token()
+        await enriquecer_permalinks(items, token, db)
+        await enriquecer_items_ws(items, db)
 
         guardar_pedido_cache(
             db=db,
@@ -128,12 +137,11 @@ def guardar_pedido_en_cache(pedido: dict, db: Session):
             cliente=cliente,
             estado_envio=estado_envio,
             estado_ml=estado_ml,
-            detalle=detalle
+            detalle=items  # ¡ya enriquecidos!
         )
-        print(f"✅ Pedido {order_id} guardado en caché.")
+        print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
     except Exception as e:
         print(f"❌ Error al guardar pedido {pedido.get('id')}: {e}")
-
 
 
 

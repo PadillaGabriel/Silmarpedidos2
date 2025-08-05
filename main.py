@@ -21,6 +21,12 @@ from io import StringIO
 import httpx
 from auth_ml import get_ml_token
 from database.connection import SessionLocal  # ✅ Correcto
+from fastapi import APIRouter, Request, Depends
+from sqlalchemy.orm import Session
+from database.session import get_db  # Asegurate que sea tu session maker real
+from auth_ml import get_valid_token
+from crud.pedidos import guardar_pedido_en_cache
+from utils import fetch_api
 
 from database.models import Base, MLPedidoCache
 from database.init import init_db
@@ -56,7 +62,7 @@ templates = Jinja2Templates(directory="templates")
 app.include_router(webhooks, prefix="/webhooks")
 
 db = SessionLocal()
-
+router = APIRouter()
 
         
 @app.on_event("startup")
@@ -128,25 +134,14 @@ def obtener_info_adicional_por_sku(sku, db: Session):
     return {"codigo_proveedor": None, "codigo_alfa": None}
 
 @app.get("/configuracion", response_class=HTMLResponse)
-async def configuracion_get(
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)  # ✅ agregar esto
-):
-    logisticas = get_all_logisticas(db)  # ✅ pasar db
-        
-@app.get("/configuracion", response_class=HTMLResponse)
-async def configuracion_get(
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    logisticas = get_all_logisticas(db)
-    return templates.TemplateResponse(
-        "configuracion.html",
-        {"request": request, "usuario": current_user["username"], "logisticas": logisticas}
-    )
+async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
+    logisticas = get_all_logisticas()
+    return templates.TemplateResponse("configuracion.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
 
+@app.post("/configuracion")
+async def configuracion_post(request: Request, logistica: str = Form(...), current_user: dict = Depends(get_current_user)):
+    add_logistica(logistica.strip())
+    return RedirectResponse("/configuracion", status_code=302)
 @app.post("/configuracion")
 async def configuracion_post(
     request: Request,
@@ -448,44 +443,33 @@ async def despachar_post(
 
 
 
-@webhooks.post("/ml")
+@router.post("/webhooks/ml")
 async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
-    print("📥 Webhook recibido")
-
     try:
-        data = await request.json()
+        body = await request.json()
+        topic = body.get("topic")
+        resource = body.get("resource")
+        user_id = body.get("user_id")
+
+        if not topic or not resource:
+            return {"status": "ignored", "reason": "Missing topic or resource"}
+
+        print(f"🔔 Notificación recibida: {topic} → {resource}")
+
+        # Procesar solo pedidos nuevos o actualizados
+        if topic == "orders_v2" and resource.startswith("/orders/"):
+            order_id = resource.split("/")[-1]
+            token = get_valid_token()
+            if not token:
+                return {"status": "error", "reason": "No valid token"}
+
+            # Llamamos a la API de ML
+            pedido = fetch_api(f"/orders/{order_id}", extra_headers={"Authorization": f"Bearer {token}"})
+            if pedido:
+                await guardar_pedido_en_cache(pedido, db)
+
+        return {"status": "ok"}
+    
     except Exception as e:
-        print("❌ Error al parsear JSON:", e)
-        return {"status": "error", "detail": "Invalid JSON"}
-
-    topic = data.get("topic")
-    resource = data.get("resource")
-    print(f"🔔 Notificación recibida: {topic} → {resource}")
-
-    try:
-        # Detectar si el recurso es un pedido o un envío
-        order_match = re.match(r"^/orders/(\d+)", resource)
-        shipment_match = re.match(r"^/shipments/(\d+)", resource)
-
-        if order_match:
-            order_id = order_match.group(1)
-            print(f"🔍 Procesando como order_id: {order_id}")
-            await get_order_details(order_id=order_id, db=db)
-
-        elif shipment_match:
-            shipment_id = shipment_match.group(1)
-            print(f"🔍 Procesando como shipment_id: {shipment_id}")
-            await get_order_details(shipment_id=shipment_id, db=db)
-
-        elif topic == "feedback" and "/orders/" in resource and "/feedback" in resource:
-            order_id = resource.split("/")[2]
-            print(f"⚠️ Reclamo recibido para pedido {order_id}")
-            marcar_pedido_con_feedback(order_id, db)
-
-        else:
-            print(f"⚠️ No se pudo interpretar la notificación: topic={topic}, resource={resource}")
-
-    except Exception as e:
-        print(f"❌ Error procesando webhook: {e}")
-
-    return {"status": "ok"}
+        print(f"❌ Error en webhook ML: {e}")
+        return {"status": "error", "detail": str(e)}
