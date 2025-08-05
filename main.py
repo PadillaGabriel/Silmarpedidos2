@@ -430,37 +430,49 @@ async def despachar_post(
 @router.post("/webhooks/ml")
 async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
     try:
-        body = await request.json()
+        try:
+            body = await request.json()
+        except Exception as e:
+            print(f"❌ Error al leer el cuerpo del webhook: {e}")
+            return {"status": "error", "detail": str(e)}
+
         topic = body.get("topic")
         resource = body.get("resource")
         user_id = body.get("user_id")
 
         if not topic or not resource:
-            print("❌ Webhook ignorado: falta topic o resource")
+            print("⚠️ Webhook ignorado: falta topic o resource")
             return {"status": "ignored", "reason": "Missing topic or resource"}
 
         print(f"🔔 Notificación recibida: {topic} → {resource}")
 
+        # Solo procesamos órdenes nuevas o modificadas
         if topic == "orders_v2" and resource.startswith("/orders/"):
+            print("📦 Es un pedido, vamos a consultar la API de ML")
             order_id = resource.split("/")[-1]
-            token = obtener_token()
-            if not token:
-                print("❌ Token inválido")
-                return {"status": "error", "reason": "No valid token"}
 
-            loop = asyncio.get_event_loop()
-            pedido = await loop.run_in_executor(
-                None, lambda: fetch_api(f"/orders/{order_id}", extra_headers={"Authorization": f"Bearer {token}"})
-            )
+            try:
+                token = obtener_token()
+                if not token:
+                    print("❌ No se pudo obtener un token válido")
+                    return {"status": "error", "reason": "No valid token"}
+
+                pedido = fetch_api(
+                    f"/orders/{order_id}",
+                    extra_headers={"Authorization": f"Bearer {token}"}
+                )
+            except Exception as e:
+                print(f"❌ Error al llamar a la API de ML: {e}")
+                return {"status": "error", "reason": str(e)}
 
             if pedido:
-                print(f"📦 Pedido obtenido: {pedido.get('id')}")
-                guardar_pedido_en_cache(pedido, db)
+                print(f"📥 Pedido {pedido.get('id')} obtenido de la API, guardando en caché...")
+                await guardar_pedido_en_cache(pedido, db)
             else:
-                print(f"❌ No se pudo obtener el pedido {order_id}")
+                print(f"⚠️ No se encontró información para el pedido {order_id}")
 
         return {"status": "ok"}
 
     except Exception as e:
-        print(f"❌ Error en webhook ML: {e}")
+        print(f"❌ Error inesperado en el webhook ML: {e}")
         return {"status": "error", "detail": str(e)}
