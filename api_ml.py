@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from crud.utils import buscar_item_cache_por_sku 
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
+from database.pedidos import guardar_pedido_en_cache
 
 
 # Configuración
@@ -164,6 +165,7 @@ def parse_order_data(order_data: dict) -> dict:
     return {"cliente": cliente, "items": items}
 
 async def get_order_details(order_id: str = None, shipment_id: str = None, db: Session = None) -> dict:
+    
     token = get_valid_token()
     if not token:
         logger.error("No se obtuvo token válido")
@@ -193,6 +195,8 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     if order_id:
         try:
             od = fetch_api(f"/orders/{order_id}", extra_headers=headers)
+            od["id"] = order_id  # asegurarse que tenga "id"
+            await guardar_pedido_en_cache(od, db)
             parsed = parse_order_data(od)
             parsed["primer_order_id"] = order_id
             return parsed

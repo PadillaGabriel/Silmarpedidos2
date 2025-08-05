@@ -428,7 +428,9 @@ async def despachar_post(
 
 
 @router.post("/webhooks/ml")
+
 async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
+    print("📥 Webhook recibido:", body)
     body = await request.json()
     topic = body.get("topic")
     resource = body.get("resource")

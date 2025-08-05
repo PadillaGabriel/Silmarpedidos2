@@ -99,29 +99,36 @@ def limpiar_cache_antiguo(db: Session, dias: int = 30):
     db.commit()
 
 def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: str, estado_envio: str, estado_ml: str, detalle: dict):
-    cache = MLPedidoCache(
-        shipment_id=shipment_id,
-        order_id=order_id,
-        cliente=cliente,
-        estado_envio=estado_envio,
-        estado_ml=estado_ml,
-        detalle=detalle
-    )
-    db.merge(cache)  # actualiza si existe
-    print("💾 Commit a la base de datos")
+    try:
+        cache = MLPedidoCache(
+            shipment_id=shipment_id,
+            order_id=order_id,
+            cliente=cliente,
+            estado_envio=estado_envio,
+            estado_ml=estado_ml,
+            detalle=detalle
+        )
 
-    db.commit()
-    verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
-    if not verificado:
-        print("❌ Commit realizado pero no se encuentra el pedido guardado.")
+        db.merge(cache)  # actualiza si ya existe
+        db.commit()
+        print(f"💾 Pedido {order_id} commit a la base de datos")
 
+        # Validación extra
+        verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
+        if verificado:
+            print(f"🟢 Pedido verificado en base: {verificado.order_id}")
+        else:
+            print(f"❌ Commit realizado pero no se encuentra el pedido guardado con order_id={order_id}")
+
+    except Exception as e:
+        print(f"💥 Error al guardar pedido {order_id}: {e}")
 
 
 async def guardar_pedido_en_cache(pedido: dict, db: Session):
-    print(f"🧩 Ejecutando guardar_pedido_en_cache con order_id={order_id}")
-
     try:
         order_id = pedido["id"]
+        print(f"🧩 Ejecutando guardar_pedido_en_cache con order_id={order_id}")
+
         shipment_id = pedido.get("shipping", {}).get("id")
         cliente = pedido.get("buyer", {}).get("nickname", "")
         estado_ml = pedido.get("status", "unknown")
@@ -147,8 +154,6 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session):
         print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
     except Exception as e:
         print(f"❌ Error al guardar pedido {pedido.get('id')}: {e}")
-
-
 
 def marcar_pedido_con_feedback(order_id: int, db: Session):
     pedido = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
