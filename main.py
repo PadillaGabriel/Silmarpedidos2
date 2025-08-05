@@ -118,17 +118,6 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=302)
 
-def obtener_info_adicional_por_sku(sku, db: Session):
-    try:
-        item = buscar_item_cache_por_sku(db, sku)
-        if item:
-            return {
-                "codigo_proveedor": item.item_vendorCode,
-                "codigo_alfa": item.item_code
-            }
-    except Exception as e:
-        print("❌ Error buscando en cache:", e)
-    return {"codigo_proveedor": None, "codigo_alfa": None}
 
 @app.get("/configuracion", response_class=HTMLResponse)
 async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
@@ -139,15 +128,7 @@ async def configuracion_get(request: Request, current_user: dict = Depends(get_c
 async def configuracion_post(request: Request, logistica: str = Form(...), current_user: dict = Depends(get_current_user)):
     add_logistica(logistica.strip())
     return RedirectResponse("/configuracion", status_code=302)
-@app.post("/configuracion")
-async def configuracion_post(
-    request: Request,
-    logistica: str = Form(...),
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    add_logistica(db, logistica.strip())
-    return RedirectResponse("/configuracion", status_code=302)
+
 
 @app.get("/recuperar", response_class=HTMLResponse)
 async def recuperar_get(request: Request):
