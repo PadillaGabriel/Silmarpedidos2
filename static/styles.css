@@ -1407,3 +1407,78 @@ ul.config-list li {
     flex-shrink: 0 !important;
   }
 }
+
+#estado_envio.badge {
+  color: black !important;
+}
+
+.form-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.form-filters .filter {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 768px) {
+  .form-filters .filter {
+    flex: 1 1 calc(33.33% - 16px); /* 3 columnas en 2 filas */
+  }
+
+  .form-filters .filter--button {
+    flex: 1 1 100%; /* botón ocupa fila completa */
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .form-filters .filter--button button {
+    width: auto;
+  }
+}
+.toggle-password {
+  position: absolute;
+  right: 35px;
+  top: 36%;
+  transform: translateY(-50%);
+  background: none !important;
+  border: none !important;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: #0a273f !important;
+  box-shadow: none !important;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-password svg {
+  pointer-events: none;
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.password-wrapper {
+  position: relative;
+}
+
+.password-wrapper .toggle-password {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.password-wrapper .toggle-password svg {
+  display: block;
+}
