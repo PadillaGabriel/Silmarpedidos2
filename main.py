@@ -127,13 +127,13 @@ def obtener_info_adicional_por_sku(sku, db: Session):
         print("❌ Error buscando en cache:", e)
     return {"codigo_proveedor": None, "codigo_alfa": None}
 
-@app.get("/actualizar-cache-ws", response_class=JSONResponse)
-async def actualizar_cache_ws(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    try:
-        actualizar_ws_items(db)
-        return {"success": True, "mensaje": "Catálogo actualizado correctamente desde WS"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+@app.get("/configuracion", response_class=HTMLResponse)
+async def configuracion_get(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)  # ✅ agregar esto
+):
+    logisticas = get_all_logisticas(db)  # ✅ pasar db
         
 @app.get("/configuracion", response_class=HTMLResponse)
 async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
@@ -401,7 +401,7 @@ def estado_envio(shipment_id: str, current_user: dict = Depends(get_current_user
 
 @app.get("/despachar", response_class=HTMLResponse)
 async def despachar_get(request: Request, current_user: dict = Depends(get_current_user)):
-    logisticas = get_all_logisticas()
+    logisticas = get_all_logisticas(db)
     return templates.TemplateResponse("despachar.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
 
 @app.post("/despachar")
