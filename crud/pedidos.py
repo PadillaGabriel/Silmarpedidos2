@@ -5,7 +5,7 @@ from database.connection import SessionLocal  # ✅ correcto
 from database.models import Pedido, WsItem
 from sqlalchemy.orm import Session        # ✅ Correcto
 from api_ml import enriquecer_permalinks, enriquecer_items_ws, parse_order_data
-from auth_ml import get_valid_token
+from auth_ml import obtener_token
 
 def add_order_if_not_exists(detalle):
     session = SessionLocal()
@@ -123,7 +123,7 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session):
         items = parsed.get("items", [])
 
         # Enriquecer datos como imagen, SKU y Alfa
-        token = get_valid_token()
+        token = obtener_token()
         await enriquecer_permalinks(items, token, db)
         await enriquecer_items_ws(items, db)
 
