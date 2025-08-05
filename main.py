@@ -136,15 +136,26 @@ async def configuracion_get(
     logisticas = get_all_logisticas(db)  # ✅ pasar db
         
 @app.get("/configuracion", response_class=HTMLResponse)
-async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
-    logisticas = get_all_logisticas()
-    return templates.TemplateResponse("configuracion.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
+async def configuracion_get(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    logisticas = get_all_logisticas(db)
+    return templates.TemplateResponse(
+        "configuracion.html",
+        {"request": request, "usuario": current_user["username"], "logisticas": logisticas}
+    )
 
 @app.post("/configuracion")
-async def configuracion_post(request: Request, logistica: str = Form(...), current_user: dict = Depends(get_current_user)):
-    add_logistica(logistica.strip())
+async def configuracion_post(
+    request: Request,
+    logistica: str = Form(...),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    add_logistica(db, logistica.strip())
     return RedirectResponse("/configuracion", status_code=302)
-
 
 @app.get("/recuperar", response_class=HTMLResponse)
 async def recuperar_get(request: Request):

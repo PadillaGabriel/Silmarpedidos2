@@ -10,7 +10,8 @@ from ws.items import obtener_todos_los_items, parsear_items
 from sqlalchemy.orm import Session
 from crud.pedidos import buscar_item_cache_por_sku 
 from database.models import MLPedidoCache, WsItem, MLItem
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
 
 # Configuración
 TOKEN_FILE    = "ml_token.json"
@@ -175,7 +176,7 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     if db and shipment_id:
         cache = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).first()
         if cache:
-            if cache.fecha_consulta and datetime.utcnow() - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
+            if cache.fecha_consulta and datetime.now(timezone.utc) - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
                 logger.info("Se usó cache fresca para shipment_id=%s", shipment_id)
                 return {
                     "cliente": cache.cliente,
@@ -313,15 +314,16 @@ async def fetch_item_permalink(session, item_id, token, db):
                 item_db = db.query(MLItem).filter_by(item_id=item_id).first()
                 if item_db:
                     item_db.permalink = permalink
-                    item_db.actualizado = datetime.utcnow()
+                    item_db.actualizado = datetime.now(timezone.utc)
                 else:
                     item_db = MLItem(
                         item_id=item_id,
                         permalink=permalink,
-                        actualizado=datetime.utcnow()
+                        actualizado=datetime.now(timezone.utc)
                     )
                     db.add(item_db)
                 db.commit()
+
 
                 return item_id, permalink
     except Exception as e:
