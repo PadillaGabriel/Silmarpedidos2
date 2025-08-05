@@ -3,6 +3,7 @@ import logging
 import os
 import requests
 import csv
+import asyncio
 from crud.pedidos import guardar_pedido_en_cache
 
 from datetime import datetime
@@ -435,26 +436,31 @@ async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
         user_id = body.get("user_id")
 
         if not topic or not resource:
+            print("❌ Webhook ignorado: falta topic o resource")
             return {"status": "ignored", "reason": "Missing topic or resource"}
 
         print(f"🔔 Notificación recibida: {topic} → {resource}")
 
-        # Procesar solo pedidos nuevos o actualizados
         if topic == "orders_v2" and resource.startswith("/orders/"):
             order_id = resource.split("/")[-1]
             token = obtener_token()
             if not token:
+                print("❌ Token inválido")
                 return {"status": "error", "reason": "No valid token"}
 
-            # Llamamos a la API de ML
-            pedido = fetch_api(f"/orders/{order_id}", extra_headers={"Authorization": f"Bearer {token}"})
-            if pedido:
-                guardar_pedido_en_cache(pedido, db)
-                print(f"✅ Pedido {pedido.get('id')} guardado correctamente desde webhook")
+            loop = asyncio.get_event_loop()
+            pedido = await loop.run_in_executor(
+                None, lambda: fetch_api(f"/orders/{order_id}", extra_headers={"Authorization": f"Bearer {token}"})
+            )
 
+            if pedido:
+                print(f"📦 Pedido obtenido: {pedido.get('id')}")
+                guardar_pedido_en_cache(pedido, db)
+            else:
+                print(f"❌ No se pudo obtener el pedido {order_id}")
 
         return {"status": "ok"}
-    
+
     except Exception as e:
         print(f"❌ Error en webhook ML: {e}")
         return {"status": "error", "detail": str(e)}
