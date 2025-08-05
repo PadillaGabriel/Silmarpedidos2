@@ -4,8 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from database.connection import SessionLocal  # ✅ correcto
 from database.models import Pedido, WsItem
 from sqlalchemy.orm import Session        # ✅ Correcto
-from api_ml import enriquecer_permalinks, enriquecer_items_ws
-from utils import parse_order_data
+from api_ml import enriquecer_permalinks, enriquecer_items_ws, parse_order_data
 from auth_ml import get_valid_token
 
 def add_order_if_not_exists(detalle):
