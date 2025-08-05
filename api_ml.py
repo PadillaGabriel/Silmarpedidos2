@@ -6,7 +6,7 @@ import requests
 import aiohttp
 import asyncio
 from sqlalchemy.orm import Session
-from crud.utils import buscar_item_cache_por_sku, enriquecer_items_ws
+from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws, enriquecer_permalinks,parse_order_data
 from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
