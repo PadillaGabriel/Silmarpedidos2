@@ -1,35 +1,40 @@
-
-import logging
 import os
-import requests
 import csv
+import cv2
+import numpy as np
+import logging
 import asyncio
-from crud.pedidos import guardar_pedido_en_cache
+import requests
+import httpx
 
+from io import StringIO
+from urllib.parse import urlencode
 from datetime import datetime
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile, APIRouter
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+
+from fastapi import (
+    FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile, APIRouter
+)
+from fastapi.responses import (
+    HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+)
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from passlib.hash import bcrypt
-import cv2
-import numpy as np
-from sqlalchemy.orm import Session
-from urllib.parse import urlencode
-from io import StringIO
-import httpx
-from auth_ml import get_ml_token
-from database.connection import SessionLocal  # ✅ Correcto
-from auth_ml import obtener_token
-from crud.pedidos import guardar_pedido_en_cache
-from api_ml import fetch_api, parse_order_data
 
-from database.models import Base, MLPedidoCache
+from sqlalchemy.orm import Session
+
+# Inicialización DB
+from database.connection import SessionLocal
 from database.init import init_db
-from ws.items import buscar_item_por_sku
-from crud.usuarios import get_user_by_username, create_user
+from database.models import Base, MLPedidoCache
+
+# Autenticación
+from auth_ml import get_ml_token, obtener_token
+
+# CRUD
 from crud.pedidos import (
+    guardar_pedido_en_cache,
     add_order_if_not_exists,
     marcar_envio_armado,
     marcar_pedido_despachado,
@@ -37,11 +42,27 @@ from crud.pedidos import (
     get_estado_envio,
     marcar_pedido_con_feedback
 )
-from webhooks import webhooks 
+from crud.usuarios import get_user_by_username, create_user
 from crud.utils import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
-from api_ml import get_order_details, enriquecer_items_ws
-from ws.catalogo import  actualizar_ws_items
+
+# WS externos
+from ws.items import buscar_item_por_sku
+from ws.catalogo import actualizar_ws_items
+
+# Lógica ML
+from api_ml import fetch_api, get_order_details
+
+# Utils de Mercado Libre (migrados a evitar imports circulares)
+from crud.utils import (
+    parse_order_data,
+    enriquecer_permalinks,
+    enriquecer_items_ws
+)
+
+# Webhooks
+from webhooks import webhooks
+
 
 
 def get_db():
