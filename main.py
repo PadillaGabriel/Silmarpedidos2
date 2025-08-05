@@ -26,7 +26,7 @@ from api_ml import fetch_api
 
 from database.models import Base, MLPedidoCache
 from database.init import init_db
-from ws.items import buscar_item_por_sku
+from crud.utils import buscar_item_por_sku
 from crud.usuarios import get_user_by_username, create_user
 from crud.pedidos import (
     add_order_if_not_exists,
@@ -117,6 +117,7 @@ async def clear_error(request: Request):
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/", status_code=302)
+
 def obtener_info_adicional_por_sku(sku, db: Session):
     try:
         item = buscar_item_cache_por_sku(db, sku)
