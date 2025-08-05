@@ -23,7 +23,7 @@ from auth_ml import get_ml_token
 from database.connection import SessionLocal  # ✅ Correcto
 from auth_ml import obtener_token
 from crud.pedidos import guardar_pedido_en_cache
-from api_ml import fetch_api
+from api_ml import fetch_api, parse_order_data
 
 from database.models import Base, MLPedidoCache
 from database.init import init_db
@@ -429,50 +429,40 @@ async def despachar_post(
 
 @router.post("/webhooks/ml")
 async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
+    body = await request.json()
+    topic = body.get("topic")
+    resource = body.get("resource")
+
+    if not resource or "/orders/" not in resource:
+        logger.warning("❌ Webhook sin order_id válido")
+        return {"status": "ignored"}
+
+    order_id = resource.split("/")[-1]
+    logger.info("🔔 Webhook recibido - order_id=%s", order_id)
+
     try:
-        try:
-            body = await request.json()
-        except Exception as e:
-            print(f"❌ Error al leer el cuerpo del webhook: {e}")
-            return {"status": "error", "detail": str(e)}
+        order_data = fetch_api(f"/orders/{order_id}")
+        shipment_id = order_data.get("shipping", {}).get("id")
 
-        topic = body.get("topic")
-        resource = body.get("resource")
-        user_id = body.get("user_id")
-
-        if not topic or not resource:
-            print("⚠️ Webhook ignorado: falta topic o resource")
-            return {"status": "ignored", "reason": "Missing topic or resource"}
-
-        print(f"🔔 Notificación recibida: {topic} → {resource}")
-
-        # Solo procesamos órdenes nuevas o modificadas
-        if topic == "orders_v2" and resource.startswith("/orders/"):
-            print("📦 Es un pedido, vamos a consultar la API de ML")
-            order_id = resource.split("/")[-1]
-
-            try:
-                token = obtener_token()
-                if not token:
-                    print("❌ No se pudo obtener un token válido")
-                    return {"status": "error", "reason": "No valid token"}
-
-                pedido = fetch_api(
-                    f"/orders/{order_id}",
-                    extra_headers={"Authorization": f"Bearer {token}"}
-                )
-            except Exception as e:
-                print(f"❌ Error al llamar a la API de ML: {e}")
-                return {"status": "error", "reason": str(e)}
-
-            if pedido:
-                print(f"📥 Pedido {pedido.get('id')} obtenido de la API, guardando en caché...")
-                await guardar_pedido_en_cache(pedido, db)
-            else:
-                print(f"⚠️ No se encontró información para el pedido {order_id}")
-
-        return {"status": "ok"}
+        if shipment_id:
+            logger.info("📦 Procesando por shipment_id=%s", shipment_id)
+            await get_order_details(shipment_id=shipment_id, db=db)
+        else:
+            logger.info("🔄 No hay shipment_id, usando order_id")
+            parsed = parse_order_data(order_data)
+            nuevo = MLPedidoCache(
+                shipment_id=None,
+                order_id=order_id,
+                cliente=parsed["cliente"],
+                estado_envio="—",
+                estado_ml="—",
+                detalle=parsed["items"]
+            )
+            db.merge(nuevo)
+            db.commit()
+            logger.info("✅ Pedido guardado solo con order_id")
 
     except Exception as e:
-        print(f"❌ Error inesperado en el webhook ML: {e}")
-        return {"status": "error", "detail": str(e)}
+        logger.error("💥 Error procesando order_id=%s: %s", order_id, e)
+
+    return {"status": "ok"}
