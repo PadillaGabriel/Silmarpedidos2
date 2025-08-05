@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import aiohttp
 import logging
 from ws.items import obtener_todos_los_items, parsear_items
-from database.pedidos import buscar_item_cache_por_sku
+from crud.pedidos import buscar_item_cache_por_sku
 from auth_ml import  autenticar_desde_json
 from database.models import MLItem, WsItem
 from sqlalchemy.orm import Session
