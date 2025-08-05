@@ -6,6 +6,7 @@ import requests
 import aiohttp
 import asyncio
 from sqlalchemy.orm import Session
+
 from crud.utils import parse_order_data, enriquecer_permalinks, enriquecer_items_ws
 from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
@@ -308,3 +309,59 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
 
 
 
+def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: str, estado_envio: str, estado_ml: str, detalle: dict):
+    try:
+        cache = MLPedidoCache(
+            shipment_id=shipment_id,
+            order_id=order_id,
+            cliente=cliente,
+            estado_envio=estado_envio,
+            estado_ml=estado_ml,
+            detalle=detalle
+        )
+
+        db.merge(cache)  # actualiza si ya existe
+        db.commit()
+        print(f"💾 Pedido {order_id} commit a la base de datos")
+
+        # Validación extra
+        verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
+        if verificado:
+            print(f"🟢 Pedido verificado en base: {verificado.order_id}")
+        else:
+            print(f"❌ Commit realizado pero no se encuentra el pedido guardado con order_id={order_id}")
+
+    except Exception as e:
+        print(f"💥 Error al guardar pedido {order_id}: {e}")
+
+
+async def guardar_pedido_en_cache(pedido: dict, db: Session):
+    try:
+        order_id = pedido["id"]
+        print(f"🧩 Ejecutando guardar_pedido_en_cache con order_id={order_id}")
+
+        shipment_id = pedido.get("shipping", {}).get("id")
+        cliente = pedido.get("buyer", {}).get("nickname", "")
+        estado_ml = pedido.get("status", "unknown")
+        estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
+
+        parsed = parse_order_data(pedido)
+        items = parsed.get("items", [])
+
+        # Enriquecer datos como imagen, SKU y Alfa
+        token = get_valid_token()
+        await enriquecer_permalinks(items, token, db)
+        await enriquecer_items_ws(items, db)
+
+        guardar_pedido_cache(
+            db=db,
+            shipment_id=shipment_id,
+            order_id=order_id,
+            cliente=cliente,
+            estado_envio=estado_envio,
+            estado_ml=estado_ml,
+            detalle=items  # ¡ya enriquecidos!
+        )
+        print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
+    except Exception as e:
+        print(f"❌ Error al guardar pedido {pedido.get('id')}: {e}")
