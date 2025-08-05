@@ -3,7 +3,6 @@ import logging
 import os
 import requests
 import csv
-import re
 from crud.pedidos import guardar_pedido_en_cache
 
 from datetime import datetime
@@ -21,11 +20,9 @@ from io import StringIO
 import httpx
 from auth_ml import get_ml_token
 from database.connection import SessionLocal  # ✅ Correcto
-from fastapi import APIRouter, Request, Depends
-from sqlalchemy.orm import Session
 from auth_ml import obtener_token
 from crud.pedidos import guardar_pedido_en_cache
-from utils import fetch_api
+from api_ml import fetch_api
 
 from database.models import Base, MLPedidoCache
 from database.init import init_db
