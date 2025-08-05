@@ -125,8 +125,13 @@ async def configuracion_get(request: Request, current_user: dict = Depends(get_c
     return templates.TemplateResponse("configuracion.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
 
 @app.post("/configuracion")
-async def configuracion_post(request: Request, logistica: str = Form(...), current_user: dict = Depends(get_current_user)):
-    add_logistica(logistica.strip())
+async def configuracion_post(
+    request: Request,
+    logistica: str = Form(...),
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)  # ✅ agregar esta línea
+):
+    add_logistica(logistica.strip(), db)  # ✅ pasar db a la función
     return RedirectResponse("/configuracion", status_code=302)
 
 
