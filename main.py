@@ -23,7 +23,6 @@ from auth_ml import get_ml_token
 from database.connection import SessionLocal  # ✅ Correcto
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
-from database.session import get_db  # Asegurate que sea tu session maker real
 from auth_ml import get_valid_token
 from crud.pedidos import guardar_pedido_en_cache
 from utils import fetch_api
