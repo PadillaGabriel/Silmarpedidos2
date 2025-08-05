@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from database.connection import SessionLocal
 from database.models import Pedido, WsItem, MLPedidoCache, MLItem  # ✅ agregué MLItem si usás fetch_item_permalink
-from crud.utils import parse_order_data, enriquecer_permalinks, enriquecer_items_ws
 from ws.items import buscar_item_por_sku, parsear_items,obtener_todos_los_items
 from ws.auth import autenticar_desde_json
 from sqlalchemy.orm import Session
