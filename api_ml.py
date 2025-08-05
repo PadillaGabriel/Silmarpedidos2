@@ -11,7 +11,7 @@ from crud.utils import enriquecer_permalinks
 from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
-from crud.pedidos import guardar_pedido_en_cache, buscar_item_cache_por_sku, enriquecer_items_ws
+from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
 
 
 
