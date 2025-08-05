@@ -8,7 +8,7 @@ import asyncio
 from ws.auth import autenticar_desde_json
 from ws.items import obtener_todos_los_items, parsear_items
 from sqlalchemy.orm import Session
-from crud.pedidos import buscar_item_cache_por_sku 
+from crud.utils import buscar_item_cache_por_sku 
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
 

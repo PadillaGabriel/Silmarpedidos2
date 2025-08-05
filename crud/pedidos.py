@@ -92,8 +92,6 @@ def get_all_pedidos(order_id=None, shipment_id=None, date_from=None, date_to=Non
         "usuario_despacho": r.usuario_despacho
     } for r in rows]
 
-def buscar_item_cache_por_sku(db: Session, sku: str):
-    return db.query(WsItem).filter(WsItem.item_code == sku).first()
 
 def limpiar_cache_antiguo(db: Session, dias: int = 30):
     from datetime import datetime, timedelta
