@@ -26,7 +26,7 @@ from api_ml import fetch_api
 
 from database.models import Base, MLPedidoCache
 from database.init import init_db
-from crud.utils import buscar_item_por_sku
+from ws.items import buscar_item_por_sku
 from crud.usuarios import get_user_by_username, create_user
 from crud.pedidos import (
     add_order_if_not_exists,
@@ -37,7 +37,7 @@ from crud.pedidos import (
     marcar_pedido_con_feedback
 )
 from webhooks import webhooks 
-from crud.pedidos import buscar_item_cache_por_sku
+from crud.utils import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
 from api_ml import get_order_details, enriquecer_items_ws
 from ws.catalogo import  actualizar_ws_items
