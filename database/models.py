@@ -52,9 +52,7 @@ class MLPedidoCache(Base):
     estado_envio = Column(String, nullable=True)
     estado_ml = Column(String, nullable=True)
     detalle = Column(JSON, nullable=True)
-<<<<<<< HEAD
     fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
-=======
     fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
     tiene_devolucion = Column(Boolean, default=False) 
 
@@ -64,4 +62,3 @@ class MLItem(Base):
     item_id = Column(String, primary_key=True)
     permalink = Column(String)
     actualizado = Column(DateTime)
->>>>>>> 68d8912 (Actualizacion WebHook)
