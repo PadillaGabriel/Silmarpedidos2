@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from crud.utils import buscar_item_cache_por_sku 
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
-from database.pedidos import guardar_pedido_en_cache
+from crud.pedidos import guardar_pedido_en_cache
 
 
 # Configuración
