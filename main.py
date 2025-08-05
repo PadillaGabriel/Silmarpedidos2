@@ -23,7 +23,7 @@ from auth_ml import get_ml_token
 from database.connection import SessionLocal  # ✅ Correcto
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
-from auth_ml import get_valid_token
+from auth_ml import obtener_token
 from crud.pedidos import guardar_pedido_en_cache
 from utils import fetch_api
 
@@ -458,7 +458,7 @@ async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
         # Procesar solo pedidos nuevos o actualizados
         if topic == "orders_v2" and resource.startswith("/orders/"):
             order_id = resource.split("/")[-1]
-            token = get_valid_token()
+            token = obtener_token()
             if not token:
                 return {"status": "error", "reason": "No valid token"}
 
