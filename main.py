@@ -449,7 +449,9 @@ async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
             # Llamamos a la API de ML
             pedido = fetch_api(f"/orders/{order_id}", extra_headers={"Authorization": f"Bearer {token}"})
             if pedido:
-                await guardar_pedido_en_cache(pedido, db)
+                guardar_pedido_en_cache(pedido, db)
+                print(f"✅ Pedido {pedido.get('id')} guardado correctamente desde webhook")
+
 
         return {"status": "ok"}
     
