@@ -2,96 +2,16 @@
 import asyncio
 from datetime import datetime, timezone
 import aiohttp
+import logging
+from ws.items import buscar_item_cache_por_sku,obtener_todos_los_items, parsear_items
+from auth_ml import  autenticar_desde_json
+from database.models import MLItem, WsItem
+from sqlalchemy.orm import Session
 
-from database.models import MLItem
-from api_ml import fetch_api  # este sí se puede importar aquí sin riesgo circular
+# Logger
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
-def parse_order_data(order_data: dict) -> dict:
-    """
-    De un JSON /orders/{order_id}, extraer:
-      - titulo
-      - sku
-      - variante
-      - cantidad
-      - imágenes
-    y devolver un diccionario con la forma:
-      {
-        "cliente": <nick del buyer>,
-        "items": [
-          { "titulo": ..., "sku": ..., "variante": ..., "cantidad": ..., "imagenes": [ {url, thumbnail}, ... ] },
-          ...
-        ]
-      }
-    """
-    DEFAULT_IMG_LOCAL = DEFAULT_IMG
-
-    cliente = order_data.get("buyer", {}).get("nickname", "Cliente desconocido")
-
-    raw_items = order_data.get("order_items", [])
-    # En algunos casos vienen en "items" en lugar de "order_items"
-    if not raw_items:
-        raw_items = order_data.get("items", [])
-
-    items = []
-    for oi in raw_items:
-        # Si viene la forma order_items, el item real está en oi["item"]
-        prod = oi.get("item", oi)
-
-        titulo   = prod.get("title", "Sin título")
-        cantidad = oi.get("quantity", 0)
-
-        # Variante: revisamos variation_attributes, si existe
-        attrs = prod.get("variation_attributes", [])
-        if attrs:
-            variante = " | ".join(f"{a['name']}: {a['value_name']}" for a in attrs if a.get("value_name"))
-        else:
-            variante = "—"
-
-        # SKU: siguiendo la doc de ML, primero seller_sku de variación, sino seller_custom_field de variación,
-        # luego seller_sku de item, luego seller_custom_field de item.
-        sku = (
-            prod.get("seller_sku")
-            or prod.get("seller_custom_field")
-            or oi.get("seller_custom_field")
-            or oi.get("seller_sku")
-            or "Sin SKU"
-        )
-
-        # Construir lista de imágenes:
-        imgs = []
-        variation_id = prod.get("variation_id")
-        if variation_id:
-            # Si existe variation_id, pedimos /items/{item_id}/variations/{variation_id}
-            v = fetch_api(f"/items/{prod['id']}/variations/{variation_id}")
-            for pid in v.get("picture_ids", []):
-                #  ML convention: D_{picture_id}-O.jpg → imagen full, D_{picture_id}-I.jpg → thumbnail
-                imgs.append({
-                    "url":       f"https://http2.mlstatic.com/D_{pid}-O.jpg",
-                    "thumbnail": f"https://http2.mlstatic.com/D_{pid}-I.jpg"
-                })
-        else:
-            # Si no hay variation_id, pedimos /items/{item_id}
-            p = fetch_api(f"/items/{prod['id']}")
-            for pic in p.get("pictures", []):
-                imgs.append({
-                    "url":       pic.get("url", DEFAULT_IMG_LOCAL),
-                    "thumbnail": pic.get("secure_url", DEFAULT_IMG_LOCAL)
-                })
-
-        if not imgs:
-            imgs = [{"url": DEFAULT_IMG_LOCAL, "thumbnail": DEFAULT_IMG_LOCAL}]
-
-        items.append({
-            "titulo":   titulo,
-            "sku":      sku,
-            "variante": variante,
-            "cantidad": cantidad,
-            "imagenes": imgs,
-            "item_id": prod.get("id"),
-            "variation_id": prod.get("variation_id")
-        })
-
-    return {"cliente": cliente, "items": items}
 
 async def enriquecer_permalinks(items: list, token: str, db: Session):
     async with aiohttp.ClientSession() as session:
