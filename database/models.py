@@ -22,7 +22,6 @@ class Pedido(Base):
     usuario_armado = Column(String(100), nullable=True)
     usuario_despacho = Column(String(100), nullable=True)
 
-    __table_args__ = (UniqueConstraint("shipment_id", "order_id", name="uix_shipment_order"),)
 
 class Usuario(Base):
     __tablename__ = "usuarios"
