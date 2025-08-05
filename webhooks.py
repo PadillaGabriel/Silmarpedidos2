@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 import httpx
 from auth_ml import get_ml_token
-from crud.pedidos import guardar_pedido_en_cache
+from api_ml import guardar_pedido_en_cache
 
 webhooks = APIRouter()
 
