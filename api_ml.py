@@ -5,10 +5,11 @@ import logging
 import requests
 import aiohttp
 import asyncio
+from ws.auth import autenticar_desde_json
+from ws.items import obtener_todos_los_items, parsear_items
 from sqlalchemy.orm import Session
 from crud.pedidos import buscar_item_cache_por_sku 
-from database.models import WsItem
-from database.models import MLPedidoCache
+from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta
 
 # Configuración
@@ -261,6 +262,9 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
 
             # 🔁 Agregamos permalinks en paralelo
             await enriquecer_permalinks(all_items, token, db)
+            # 🔁 Enriquecer en paralelo (si querés):
+            await enriquecer_items_ws(all_items, db)
+
 
             if all_items:
                 resultado = {
@@ -294,6 +298,8 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
     return {"cliente": "Error", "items": [], "primer_order_id": None}
 
+
+
 async def fetch_item_permalink(session, item_id, token, db):
     url = f"https://api.mercadolibre.com/items/{item_id}"
     headers = {"Authorization": f"Bearer {token}"}
@@ -304,12 +310,12 @@ async def fetch_item_permalink(session, item_id, token, db):
                 permalink = data.get("permalink")
 
                 # Guardar en cache si existe el item
-                item_db = db.query(WsItem).filter_by(item_id=item_id).first()
+                item_db = db.query(MLItem).filter_by(item_id=item_id).first()
                 if item_db:
                     item_db.permalink = permalink
                     item_db.actualizado = datetime.utcnow()
                 else:
-                    item_db = WsItem(
+                    item_db = MLItem(
                         item_id=item_id,
                         permalink=permalink,
                         actualizado=datetime.utcnow()
@@ -341,19 +347,60 @@ async def enriquecer_permalinks(items: list, token: str, db: Session):
 
 async def enriquecer_items_ws(items: list, db: Session):
     sku_cache = {}
+    skus_faltantes = set()
 
-    async def enriquecer(item):
+    # 1. Buscar en caché local
+    for item in items:
         sku = item.get("sku")
         if not sku:
-            return
-        if sku in sku_cache:
-            info = sku_cache[sku]
-        else:
-            info = await asyncio.to_thread(buscar_item_cache_por_sku, db, sku)
-            sku_cache[sku] = info
+            continue
+        info = buscar_item_cache_por_sku(db, sku)
         if info:
-            item["codigo_proveedor"] = info.item_vendorcode
-            item["item_vendorcode"] = info.item_vendorcode  # ✅ opcional si querés mostrar en columna tabla
-            item["codigo_alfa"] = info.item_vendorcode      # ✅ esto evita el error y mantiene compatibilidad visual
+            sku_cache[sku] = {
+                 "item_vendorCode": info.item_vendorCode
+            }
+        else:
+            skus_faltantes.add(sku)
 
     await asyncio.gather(*(enriquecer(item) for item in items))
+    # 2. Si hay faltantes, consultar el WS UNA vez
+    if skus_faltantes:
+        print(f"🔍 Buscando {len(skus_faltantes)} SKUs faltantes desde Web Service...")
+        token = await asyncio.to_thread(autenticar_desde_json)
+        xml = await asyncio.to_thread(obtener_todos_los_items, token)
+        ws_items = await asyncio.to_thread(parsear_items, xml)
+
+        nuevos_ws_items = []
+
+        for ws_data in ws_items:
+            item_code = ws_data["item_code"]
+            if item_code in skus_faltantes:
+                sku_cache[item_code] = {
+                    "item_vendorCode": ws_data["item_vendorCode"]
+                }
+
+                # Crear objeto para guardar en DB
+                # ✅ CORRECTO
+            nuevos_ws_items.append(WsItem(
+            item_id=ws_data["item_id"],
+            item_code=ws_data["item_code"],
+            item_vendorCode=ws_data["item_vendorCode"]  # ✅ corregido
+            ))
+
+
+        # Guardar nuevos ítems en la base de datos
+        if nuevos_ws_items:
+            db.bulk_save_objects(nuevos_ws_items)
+            db.commit()
+            print(f"✅ {len(nuevos_ws_items)} ítems nuevos agregados al cache.")
+
+    # 3. Enriquecer los ítems con los datos ya en memoria
+    for item in items:
+        sku = item.get("sku")
+        if not sku:
+            continue
+        info = sku_cache.get(sku)
+        if info:
+            item["codigo_proveedor"] = info["item_vendorCode"]
+            item["item_vendorCode"] = info["item_vendorCode"]
+            item["codigo_alfa"] = info["item_vendorCode"]

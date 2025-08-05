@@ -45,6 +45,11 @@ def obtener_token(code):
         print("❌ Error al obtener el token:", response.status_code)
         print(response.json())
 
+def get_ml_token():
+    with open("ml_token.json", "r") as f:
+        data = json.load(f)
+    return data["access_token"]
+
 # --- EJECUCIÓN ---
 if __name__ == "__main__":
     solicitar_codigo()

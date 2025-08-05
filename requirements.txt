@@ -4,9 +4,11 @@ jinja2
 python-multipart
 itsdangerous
 requests
-Sqlalchemy
-passlib[bcrypt] 
+sqlalchemy
+passlib[bcrypt]
 opencv-python
 psycopg2-binary
 aiohttp
 asyncio
+python-dotenv
+httpx

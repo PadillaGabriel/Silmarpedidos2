@@ -1,7 +1,10 @@
 from ws.auth import autenticar_desde_json
 from ws.items import obtener_todos_los_items, parsear_items
 from database.models import WsItem
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+from database.init import init_db
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
 from datetime import datetime
 import logging
 import os
@@ -58,15 +61,11 @@ def actualizar_ws_items(db: Session):
     logging.info(f"Catálogo actualizado: {len(nuevos)} nuevos, {actualizados} actualizados.")
 
 if __name__ == "__main__":
-    from database.init import init_db
-    from sqlalchemy.orm import sessionmaker
-    from sqlalchemy import create_engine
-    import os
 
-    from dotenv import load_dotenv
+
     load_dotenv()
 
-    DATABASE_URL = os.getenv("DATABASE_URL")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///pedidos.db")
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(bind=engine)
 

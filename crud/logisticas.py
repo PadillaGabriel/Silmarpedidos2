@@ -1,4 +1,4 @@
-from database.connection import Session
+from sqlalchemy.orm import Session        # ✅ Correcto
 from database.models import Logistica
 
 def get_all_logisticas():

@@ -1,11 +1,13 @@
 from datetime import datetime
 from database.models import MLPedidoCache
 from sqlalchemy.dialects.postgresql import JSONB
-from database.connection import Session
+from database.connection import SessionLocal  # ✅ correcto
 from database.models import Pedido, WsItem
+from sqlalchemy.orm import Session        # ✅ Correcto
+    
 
 def add_order_if_not_exists(detalle):
-    session = Session()
+    session = SessionLocal()
     for item in detalle["items"]:
         exists = session.query(Pedido).filter_by(
             shipment_id=item["shipment_id"],
@@ -24,7 +26,7 @@ def add_order_if_not_exists(detalle):
     session.close()
 
 def marcar_envio_armado(shipment_id, usuario):
-    session = Session()
+    session = SessionLocal()
     ahora = datetime.now()
     filas = session.query(Pedido).filter_by(shipment_id=shipment_id, estado="pendiente").update({
         Pedido.estado: "armado",
@@ -36,7 +38,7 @@ def marcar_envio_armado(shipment_id, usuario):
     return filas > 0
 
 def marcar_pedido_despachado(shipment_id, logistica, tipo_envio, usuario):
-    session = Session()
+    session = SessionLocal()
     ahora = datetime.now()
     filas = session.query(Pedido).filter_by(shipment_id=shipment_id, estado="armado").update({
         Pedido.estado: "despachado",
@@ -50,13 +52,13 @@ def marcar_pedido_despachado(shipment_id, logistica, tipo_envio, usuario):
     return filas > 0
 
 def get_estado_envio(shipment_id):
-    session = Session()
+    session = SessionLocal()
     pedido = session.query(Pedido.estado).filter_by(shipment_id=shipment_id).first()
     session.close()
     return pedido[0] if pedido else None
 
 def get_all_pedidos(order_id=None, shipment_id=None, date_from=None, date_to=None, logistica=None):
-    session = Session()
+    session = SessionLocal()
     query = session.query(Pedido)
 
     if order_id:
@@ -108,5 +110,41 @@ def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: 
     )
     db.merge(cache)  # actualiza si existe
     db.commit()
+
+
+def guardar_pedido_en_cache(pedido: dict, db: Session):
+    try:
+        order_id = pedido["id"]
+        shipment_id = pedido.get("shipping", {}).get("id")
+        cliente = pedido.get("buyer", {}).get("nickname", "")
+        estado_ml = pedido.get("status", "unknown")
+        estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
+        detalle = pedido
+
+        guardar_pedido_cache(
+            db=db,
+            shipment_id=shipment_id,
+            order_id=order_id,
+            cliente=cliente,
+            estado_envio=estado_envio,
+            estado_ml=estado_ml,
+            detalle=detalle
+        )
+        print(f"✅ Pedido {order_id} guardado en caché.")
+    except Exception as e:
+        print(f"❌ Error al guardar pedido {pedido.get('id')}: {e}")
+
+
+
+
+def marcar_pedido_con_feedback(order_id: int, db: Session):
+    pedido = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
+    if pedido:
+        pedido.con_feedback = True
+        db.commit()
+        print(f"✅ Pedido {order_id} marcado con feedback.")
+    else:
+        print(f"⚠️ Pedido {order_id} no encontrado para marcar feedback.")
+
 
 

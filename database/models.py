@@ -39,10 +39,9 @@ class WsItem(Base):
     __tablename__ = "ws_items_cache"
 
     item_id = Column(String, primary_key=True)
-    item_code = Column(String, index=True)
-    item_vendorcode = Column("item_vendorcode", String)
-    permalink = Column(String, nullable=True)  # 👈 NUEVO
-    actualizado = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    item_code = Column(String)
+    item_vendorCode = Column(String)  # <== ATENCIÓN a la C mayúscula
+    actualizado = Column(DateTime, default=datetime.utcnow)
 
 class MLPedidoCache(Base):
     __tablename__ = "ml_pedidos_cache"
@@ -53,4 +52,16 @@ class MLPedidoCache(Base):
     estado_envio = Column(String, nullable=True)
     estado_ml = Column(String, nullable=True)
     detalle = Column(JSON, nullable=True)
+<<<<<<< HEAD
     fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
+=======
+    fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
+    tiene_devolucion = Column(Boolean, default=False) 
+
+class MLItem(Base):
+    __tablename__ = "ml_items_cache"
+
+    item_id = Column(String, primary_key=True)
+    permalink = Column(String)
+    actualizado = Column(DateTime)
+>>>>>>> 68d8912 (Actualizacion WebHook)

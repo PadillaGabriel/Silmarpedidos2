@@ -1,10 +1,13 @@
 {% extends "base.html" %}
+<<<<<<< HEAD
 {% block title %}Nombre de la página{% endblock %}
-{% block content %}
-   <div class="card mb-4">
-    <div class="card-body">
-      <h2 class="card-title">📜 Historial de Pedidos</h2>
+=======
+{% block title %}Historial de Pedidos{% endblock %}
 
+>>>>>>> 68d8912 (Actualizacion WebHook)
+{% block content %}
+
+<<<<<<< HEAD
       <!-- ========================
            FORM: Filtros
            ======================== -->
@@ -51,6 +54,73 @@
       <!-- ========================
            TABLA de resultados
            ======================== -->
+=======
+<div class="form-wrapper">
+  <form id="form-filtros" method="get">
+    <div class="card mb-4">
+
+<div class="filtros-fechas-horizontal">
+  <!-- Fecha de despacho -->
+  <div class="filtro-fecha">
+    <label for="fecha_desde">Despacho desde</label>
+    <input type="date" id="fecha_desde" name="fecha_desde" value="{{ filtro_fecha_desde }}">
+  </div>
+  <div class="filtro-fecha">
+    <label for="fecha_hasta">Despacho hasta</label>
+    <input type="date" id="fecha_hasta" name="fecha_hasta" value="{{ filtro_fecha_hasta }}">
+  </div>
+
+  <!-- Fecha de armado -->
+  <div class="filtro-fecha">
+    <label for="armado_desde">Armado desde</label>
+    <input type="date" id="armado_desde" name="armado_desde" value="{{ filtro_armado_desde }}">
+  </div>
+  <div class="filtro-fecha">
+    <label for="armado_hasta">Armado hasta</label>
+    <input type="date" id="armado_hasta" name="armado_hasta" value="{{ filtro_armado_hasta }}">
+  </div>
+</div>
+
+      <!-- Botones -->
+   <div class="filtros-botones">
+  <button type="button" class="btn btn-outline-secondary" onclick="mostrarFiltrosAdicionales()">Más filtros</button>
+  <button type="submit" class="btn btn-primary">Filtrar</button>
+  <a id="btn-exportar" class="btn btn-secondary">Exportar CSV</a>
+  <a id="btn-reset" class="btn btn-light" href="/historial" style="border: 1px solid #ccc;">Borrar filtros</a>
+</div>
+
+
+    </div>
+  </form>
+</div>
+
+<!-- Modal de filtros adicionales -->
+<div id="modal-filtros" class="modal-filtros" style="display: none;">
+  <div class="card">
+    <span class="close" onclick="cerrarFiltrosAdicionales()">&times;</span>
+    <h3>Filtros adicionales</h3>
+
+    <label for="estado">Estado</label>
+    <select id="estado" name="estado" form="form-filtros">
+      <option value="Todos" {% if filtro_estado == "Todos" %}selected{% endif %}>Todos</option>
+      <option value="pendiente" {% if filtro_estado == "pendiente" %}selected{% endif %}>Pendiente</option>
+      <option value="armado" {% if filtro_estado == "armado" %}selected{% endif %}>Armado</option>
+      <option value="despachado" {% if filtro_estado == "despachado" %}selected{% endif %}>Despachado</option>
+    </select>
+
+    <label for="order_id">Order ID</label>
+    <input type="text" id="order_id" name="order_id" value="{{ filtro_order_id }}" form="form-filtros">
+
+    <label for="logistica">Logística</label>
+    <input type="text" id="logistica" name="logistica" value="{{ filtro_logistica }}" form="form-filtros">
+  </div>
+</div>
+
+<!-- Tabla de pedidos -->
+<div class="card mb-4">
+  <div class="card-body">
+    {% if pedidos %}
+>>>>>>> 68d8912 (Actualizacion WebHook)
       <div class="table-responsive">
         <table class="history-table">
           <thead>
@@ -66,6 +136,7 @@
             </tr>
           </thead>
           <tbody>
+<<<<<<< HEAD
             {% if pedidos %}
               {% for p in pedidos %}
                 <tr>
@@ -80,14 +151,253 @@
                 </tr>
               {% endfor %}
             {% else %}
+=======
+            {% for p in pedidos %}
+>>>>>>> 68d8912 (Actualizacion WebHook)
               <tr>
-                <td colspan="10" class="no-results">No hay pedidos que mostrar.</td>
+                <td>{{ p.order_id }}</td>
+                <td>{{ p.cliente }}</td>
+                <td>{{ p.titulo }}</td>
+                <td>{{ p.cantidad }}</td>
+                <td>{{ p.estado|capitalize }}</td>
+                <td>{{ p.fecha_despacho or "—" }}</td>
+                <td>{{ p.logistica or "—" }}</td>
+                <td>{{ p.usuario_armado or '-' }}</td>
+                <td>{{ p.usuario_despacho or "—" }}</td>
               </tr>
-            {% endif %}
+            {% endfor %}
           </tbody>
         </table>
       </div>
-    </div>
+    {% else %}
+      <p style="text-align: center; padding: 2rem;">No hay pedidos que mostrar.</p>
+    {% endif %}
   </div>
+<<<<<<< HEAD
 </main>
+=======
+</div>
+
+<!-- Paginación -->
+{% if total_paginas > 1 %}
+  <nav class="pagination-nav">
+    <ul class="pagination">
+      {% if anterior_url %}
+        <li><a href="{{ anterior_url }}">« Anterior</a></li>
+      {% endif %}
+
+      <li class="current-page">Página {{ pagina_actual }} de {{ total_paginas }}</li>
+
+      {% if siguiente_url %}
+        <li><a href="{{ siguiente_url }}">Siguiente »</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}
+
+<!-- JS -->
+<script>
+  function mostrarFiltrosAdicionales() {
+    document.getElementById("modal-filtros").style.display = "block";
+  }
+
+  function cerrarFiltrosAdicionales() {
+    document.getElementById("modal-filtros").style.display = "none";
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const btnExportar = document.getElementById("btn-exportar");
+    const form = document.getElementById("form-filtros");
+
+    btnExportar.addEventListener("click", (e) => {
+      e.preventDefault();
+      const params = new URLSearchParams(new FormData(form));
+      const url = `/historial/exportar?${params.toString()}`;
+      window.location.href = url;
+    });
+
+    // Cerrar modal con tecla ESC
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") cerrarFiltrosAdicionales();
+    });
+
+    // Cerrar modal al hacer clic afuera
+    document.getElementById("modal-filtros").addEventListener("click", (e) => {
+      if (e.target.id === "modal-filtros") cerrarFiltrosAdicionales();
+    });
+  });
+</script>
+
+<!-- CSS -->
+<style>
+/* Estilo general */
+.card {
+  margin: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  background: #fff;
+}
+
+button, a.btn {
+  height: 45px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Filtros de fechas */
+.filtros-fechas-horizontal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin: 1rem 0;
+}
+
+.filtro-fecha {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 200px;
+}
+
+.filtro-fecha label {
+  font-weight: 500;
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+
+.filtro-fecha input[type="date"] {
+  height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  transition: border 0.2s ease;
+}
+
+.filtro-fecha input[type="date"]:focus {
+  outline: none;
+  border-color: #0d2b46;
+}
+
+/* Botones */
+.filtros-botones {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* Modal */
+.modal-filtros {
+  position: fixed;
+  z-index: 999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.5);
+}
+
+.modal-filtros .card {
+  background-color: #fff;
+  margin: 10% auto;
+  padding: 20px;
+  border-radius: 10px;
+  max-width: 400px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+
+.modal-filtros label {
+  margin-top: 10px;
+  display: block;
+  font-weight: 500;
+}
+
+.modal-filtros input,
+.modal-filtros select {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.close {
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.filtros-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 1rem;
+  justify-content: flex-start;
+}
+
+.filtros-botones .btn {
+  flex: 1 1 140px;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* Tabla */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history-table th,
+.history-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.history-table th {
+  background-color: #f9f9f9;
+}
+
+/* Paginación */
+.pagination-nav {
+  text-align: center;
+  margin-top: 24px;
+}
+
+.pagination {
+  list-style: none;
+  padding: 0;
+  display: inline-flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pagination a {
+  text-decoration: none;
+  padding: 6px 14px;
+  background: #f0f0f0;
+  color: #000;
+  border-radius: 5px;
+  transition: all 0.2s ease;
+}
+
+.pagination a:hover {
+  background: #0d2b46;
+  color: #fff;
+}
+
+.pagination .current-page {
+  font-weight: bold;
+  color: #000;
+}
+</style>
+
+>>>>>>> 68d8912 (Actualizacion WebHook)
 {% endblock %}

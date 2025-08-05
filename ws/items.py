@@ -41,7 +41,7 @@ def obtener_todos_los_items(token: str) -> str:
         
         if "TOKEN Expired" in nodo.text:
             print("🔁 Token expirado detectado, reautenticando...")
-            from ws.auth import autenticar_desde_json
+            
             new_token = autenticar_desde_json(force_renovar=True)
             return obtener_todos_los_items(new_token)
 

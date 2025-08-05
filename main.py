@@ -4,6 +4,13 @@ import os
 import requests
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+import csv
+import re
+from crud.pedidos import guardar_pedido_en_cache
+
+from datetime import datetime
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile, APIRouter
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -11,9 +18,12 @@ from passlib.hash import bcrypt
 import cv2
 import numpy as np
 from sqlalchemy.orm import Session
+from urllib.parse import urlencode
+from io import StringIO
+import httpx
+from auth_ml import get_ml_token
+from database.connection import SessionLocal  # ✅ Correcto
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
 from database.models import Base, MLPedidoCache
 from database.init import init_db
 from ws.items import buscar_item_por_sku
@@ -23,24 +33,15 @@ from crud.pedidos import (
     marcar_envio_armado,
     marcar_pedido_despachado,
     get_all_pedidos,
-    get_estado_envio
+    get_estado_envio,
+    marcar_pedido_con_feedback
 )
-
-from sqlalchemy.engine.url import make_url
+from webhooks import webhooks 
 from crud.pedidos import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
 from api_ml import get_order_details, enriquecer_items_ws
 from ws.catalogo import  actualizar_ws_items
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-url = make_url(DATABASE_URL)
-
-if url.drivername.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-else:
-    engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     db = SessionLocal()
@@ -54,6 +55,9 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+app.include_router(webhooks, prefix="/webhooks")
+
+db = SessionLocal()
 
 
         
@@ -136,6 +140,106 @@ async def configuracion_post(request: Request, logistica: str = Form(...), curre
     add_logistica(logistica.strip())
     return RedirectResponse("/configuracion", status_code=302)
 
+
+@app.get("/recuperar", response_class=HTMLResponse)
+async def recuperar_get(request: Request):
+    return templates.TemplateResponse("recuperar.html", {"request": request})
+
+@app.post("/recuperar")
+async def recuperar_post(
+    request: Request,
+    username: str = Form(...),
+    clave_maestra: str = Form(...),
+    nueva_password: str = Form(...)
+):
+    if clave_maestra != "silmarreset2024":
+        request.session["error"] = "Clave maestra incorrecta"
+        return RedirectResponse("/recuperar", status_code=302)
+
+    user = get_user_by_username(username)
+    if not user:
+        request.session["error"] = "Usuario no encontrado"
+        return RedirectResponse("/recuperar", status_code=302)
+
+    user.hashed_password = bcrypt.hash(nueva_password)
+    db = SessionLocal()
+    db.add(user)
+    db.commit()
+    db.close()
+
+    request.session["username"] = username
+    return RedirectResponse("/configuracion", status_code=302)
+
+@app.get("/historial/exportar")
+async def exportar_csv(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    estado: str = Query(None),
+    order_id: str = Query(None),
+    logistica: str = Query(None),
+    fecha_desde: str = Query(None),
+    fecha_hasta: str = Query(None),
+):
+    def parse_fecha(fecha_str):
+        try:
+            return datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        except:
+            return None
+
+    desde = parse_fecha(fecha_desde)
+    hasta = parse_fecha(fecha_hasta)
+    pedidos = get_all_pedidos()
+
+    filtrados = []
+    for p in pedidos:
+        cumple_estado = not estado or estado == "Todos" or p["estado"] == estado.lower()
+        cumple_order_id = not order_id or order_id in str(p["order_id"])
+        cumple_logistica = not logistica or logistica == (p["logistica"] or "")
+
+        fecha_pedido = None
+        if p.get("fecha_despacho"):
+            try:
+                fecha_pedido = datetime.strptime(p["fecha_despacho"], "%Y-%m-%d").date()
+            except:
+                pass
+
+        cumple_fecha = True
+        if desde and fecha_pedido:
+            cumple_fecha = cumple_fecha and (fecha_pedido >= desde)
+        if hasta and fecha_pedido:
+            cumple_fecha = cumple_fecha and (fecha_pedido <= hasta)
+
+        if cumple_estado and cumple_order_id and cumple_logistica and cumple_fecha:
+            filtrados.append(p)
+
+    # Escribimos el CSV en memoria
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Order ID", "Cliente", "Título", "Cantidad", "Estado",
+        "Fecha Despacho", "Logística", "Usuario Armado", "Usuario Despacho"
+    ])
+    for p in filtrados:
+        writer.writerow([
+            p["order_id"],
+            p["cliente"],
+            p["titulo"],
+            p["cantidad"],
+            p["estado"],
+            p.get("fecha_despacho") or "—",
+            p.get("logistica") or "—",
+            p.get("usuario_armado") or "-",
+            p.get("usuario_despacho") or "—"
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=historial_pedidos.csv"}
+    )
+
+
 @app.get("/historial", response_class=HTMLResponse)
 async def historial_get(request: Request, current_user: dict = Depends(get_current_user), estado: str = Query(None), shipment_id: str = Query(None), logistica: str = Query(None)):
     usuario = current_user["username"]
@@ -143,6 +247,57 @@ async def historial_get(request: Request, current_user: dict = Depends(get_curre
     filtrados = [p for p in pedidos if (not estado or estado == "Todos" or p["estado"] == estado.lower()) and
                                         (not shipment_id or shipment_id in (p["shipment_id"] or "")) and
                                         (not logistica or logistica == (p["logistica"] or ""))]
+    def parse_fecha(fecha_str):
+        try:
+            return datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        except:
+            return None
+
+    desde = parse_fecha(fecha_desde)
+    hasta = parse_fecha(fecha_hasta)
+
+    filtrados = []
+    for p in pedidos:
+        cumple_estado = not estado or estado == "Todos" or p["estado"] == estado.lower()
+        cumple_order_id = not order_id or order_id in str(p["order_id"])
+        cumple_logistica = not logistica or logistica == (p["logistica"] or "")
+
+        fecha_pedido = None
+        if p.get("fecha_despacho"):
+            try:
+                fecha_pedido = datetime.strptime(p["fecha_despacho"], "%Y-%m-%d").date()
+            except:
+                pass
+
+        cumple_fecha = True
+        if desde and fecha_pedido:
+            cumple_fecha = cumple_fecha and (fecha_pedido >= desde)
+        if hasta and fecha_pedido:
+            cumple_fecha = cumple_fecha and (fecha_pedido <= hasta)
+
+        if cumple_estado and cumple_order_id and cumple_logistica and cumple_fecha:
+            filtrados.append(p)
+
+    PAGE_SIZE = 20
+    total = len(filtrados)
+    total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    inicio = (page - 1) * PAGE_SIZE
+    fin = inicio + PAGE_SIZE
+    pagina_actual = filtrados[inicio:fin]
+
+    # Armado de URLs de paginación segura
+    query_params = dict(request.query_params)
+
+    siguiente_url = None
+    if page < total_pages:
+        query_params["page"] = page + 1
+        siguiente_url = f"?{urlencode(query_params)}"
+
+    anterior_url = None
+    if page > 1:
+        query_params["page"] = page - 1
+        anterior_url = f"?{urlencode(query_params)}"
+
     return templates.TemplateResponse("historial.html", {
         "request": request,
         "usuario": usuario,
@@ -150,8 +305,13 @@ async def historial_get(request: Request, current_user: dict = Depends(get_curre
         "filtro_estado": estado or "Todos",
         "filtro_shipment": shipment_id or "",
         "filtro_logistica": logistica or "",
+        "filtro_fecha_desde": fecha_desde or "",
+        "filtro_fecha_hasta": fecha_hasta or "",
+        "pagina_actual": page,
+        "total_paginas": total_pages,
+        "siguiente_url": siguiente_url,
+        "anterior_url": anterior_url,
     })
-
 @app.get("/escanear", response_class=HTMLResponse)
 async def escanear_get(request: Request, current_user: dict = Depends(get_current_user)):
     return templates.TemplateResponse("escanear.html", {"request": request, "usuario": current_user["username"]})
@@ -269,3 +429,49 @@ async def despachar_post(
     # ✅ Ya no se valida checklist
     ok = marcar_pedido_despachado(id_buscar, logistica, tipo_envio, usuario)
     return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
+
+
+
+
+
+@webhooks.post("/ml")
+async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
+    print("📥 Webhook recibido")
+
+    try:
+        data = await request.json()
+    except Exception as e:
+        print("❌ Error al parsear JSON:", e)
+        return {"status": "error", "detail": "Invalid JSON"}
+
+    topic = data.get("topic")
+    resource = data.get("resource")
+    print(f"🔔 Notificación recibida: {topic} → {resource}")
+
+    try:
+        # Detectar si el recurso es un pedido o un envío
+        order_match = re.match(r"^/orders/(\d+)", resource)
+        shipment_match = re.match(r"^/shipments/(\d+)", resource)
+
+        if order_match:
+            order_id = order_match.group(1)
+            print(f"🔍 Procesando como order_id: {order_id}")
+            await get_order_details(order_id=order_id, db=db)
+
+        elif shipment_match:
+            shipment_id = shipment_match.group(1)
+            print(f"🔍 Procesando como shipment_id: {shipment_id}")
+            await get_order_details(shipment_id=shipment_id, db=db)
+
+        elif topic == "feedback" and "/orders/" in resource and "/feedback" in resource:
+            order_id = resource.split("/")[2]
+            print(f"⚠️ Reclamo recibido para pedido {order_id}")
+            marcar_pedido_con_feedback(order_id, db)
+
+        else:
+            print(f"⚠️ No se pudo interpretar la notificación: topic={topic}, resource={resource}")
+
+    except Exception as e:
+        print(f"❌ Error procesando webhook: {e}")
+
+    return {"status": "ok"}

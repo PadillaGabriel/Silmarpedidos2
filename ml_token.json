@@ -1,9 +1,18 @@
 {
+<<<<<<< HEAD
   "access_token": "APP_USR-5569606371936049-070213-02ad11a794fa09f8b2cfafa0b621d979-26182591",
+=======
+  "access_token": "APP_USR-5569606371936049-080510-81a3e17b60394bcf02ded7b933a9bbb6-26182591",
+>>>>>>> 68d8912 (Actualizacion WebHook)
   "token_type": "Bearer",
   "expires_in": 21600,
   "scope": "offline_access read write",
   "user_id": 26182591,
+<<<<<<< HEAD
   "refresh_token": "TG-68656ceab0ffb60001481603-26182591",
   "created_at": "2025-07-02T14:31:23.619335"
+=======
+  "refresh_token": "TG-68921469a488170001be96fa-26182591",
+  "created_at": "2025-08-05T11:25:45.476748"
+>>>>>>> 68d8912 (Actualizacion WebHook)
 }
