@@ -42,7 +42,6 @@ from crud.pedidos import (
     marcar_pedido_con_feedback
 )
 from crud.usuarios import get_user_by_username, create_user
-from crud.utils import buscar_item_cache_por_sku
 from crud.logisticas import get_all_logisticas, add_logistica
 
 # WS externos
