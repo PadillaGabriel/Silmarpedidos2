@@ -51,11 +51,6 @@ from ws.catalogo import actualizar_ws_items
 # Lógica ML
 from api_ml import fetch_api, get_order_details,parse_order_data
 
-# Utils de Mercado Libre (migrados a evitar imports circulares)
-from crud.utils import (
-    enriquecer_permalinks,
-    enriquecer_items_ws
-)
 
 # Webhooks
 from webhooks import webhooks
