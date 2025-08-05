@@ -121,7 +121,7 @@ async def logout(request: Request):
 
 @app.get("/configuracion", response_class=HTMLResponse)
 async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
-    logisticas = get_all_logisticas(db=SessionLocal)
+    logisticas = get_all_logisticas(db)
     return templates.TemplateResponse("configuracion.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
 
 @app.post("/configuracion")
