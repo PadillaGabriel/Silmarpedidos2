@@ -362,7 +362,6 @@ async def enriquecer_items_ws(items: list, db: Session):
         else:
             skus_faltantes.add(sku)
 
-    await asyncio.gather(*(enriquecer(item) for item in items))
     # 2. Si hay faltantes, consultar el WS UNA vez
     if skus_faltantes:
         print(f"🔍 Buscando {len(skus_faltantes)} SKUs faltantes desde Web Service...")

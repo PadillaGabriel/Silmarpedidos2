@@ -2,8 +2,6 @@
 import logging
 import os
 import requests
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import csv
 import re
 from crud.pedidos import guardar_pedido_en_cache
@@ -86,7 +84,9 @@ async def register_get(request: Request):
 @app.post("/register")
 async def register_post(request: Request, username: str = Form(...), password: str = Form(...)):
     if get_user_by_username(username):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario ya existe")
+        request.session["error"] = "El usuario ya existe"
+        return RedirectResponse("/register", status_code=302)
+
     create_user(username, bcrypt.hash(password))
     request.session["username"] = username
     return RedirectResponse("/configuracion", status_code=302)
@@ -99,9 +99,17 @@ async def login_get(request: Request):
 async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
     user = get_user_by_username(username)
     if not user or not bcrypt.verify(password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+        request.session["error"] = "Credenciales inválidas"
+        return RedirectResponse("/login", status_code=302)
+
     request.session["username"] = username
     return RedirectResponse("/configuracion", status_code=302)
+
+@app.post("/clear_error")
+async def clear_error(request: Request):
+    request.session.pop("error", None)
+    return {"ok": True}
+
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -120,10 +128,7 @@ def obtener_info_adicional_por_sku(sku, db: Session):
     return {"codigo_proveedor": None, "codigo_alfa": None}
 
 @app.get("/actualizar-cache-ws", response_class=JSONResponse)
-async def actualizar_cache_ws(
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def actualizar_cache_ws(current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         actualizar_ws_items(db)
         return {"success": True, "mensaje": "Catálogo actualizado correctamente desde WS"}
@@ -131,26 +136,13 @@ async def actualizar_cache_ws(
         return {"success": False, "error": str(e)}
         
 @app.get("/configuracion", response_class=HTMLResponse)
-async def configuracion_get(
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    logisticas = get_all_logisticas(db)
-    return templates.TemplateResponse("configuracion.html", {
-        "request": request,
-        "usuario": current_user["username"],
-        "logisticas": logisticas
-    })
+async def configuracion_get(request: Request, current_user: dict = Depends(get_current_user)):
+    logisticas = get_all_logisticas()
+    return templates.TemplateResponse("configuracion.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
 
 @app.post("/configuracion")
-async def configuracion_post(
-    request: Request,
-    logistica: str = Form(...),
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    add_logistica(logistica.strip(), db)
+async def configuracion_post(request: Request, logistica: str = Form(...), current_user: dict = Depends(get_current_user)):
+    add_logistica(logistica.strip())
     return RedirectResponse("/configuracion", status_code=302)
 
 
@@ -254,12 +246,19 @@ async def exportar_csv(
 
 
 @app.get("/historial", response_class=HTMLResponse)
-async def historial_get(request: Request, current_user: dict = Depends(get_current_user), estado: str = Query(None), shipment_id: str = Query(None), logistica: str = Query(None)):
+async def historial_get(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    estado: str = Query(None),
+    order_id: str = Query(None),
+    logistica: str = Query(None),
+    fecha_desde: str = Query(None),
+    fecha_hasta: str = Query(None),
+    page: int = Query(1)
+):
     usuario = current_user["username"]
     pedidos = get_all_pedidos()
-    filtrados = [p for p in pedidos if (not estado or estado == "Todos" or p["estado"] == estado.lower()) and
-                                        (not shipment_id or shipment_id in (p["shipment_id"] or "")) and
-                                        (not logistica or logistica == (p["logistica"] or ""))]
+
     def parse_fecha(fecha_str):
         try:
             return datetime.strptime(fecha_str, "%Y-%m-%d").date()
@@ -314,9 +313,9 @@ async def historial_get(request: Request, current_user: dict = Depends(get_curre
     return templates.TemplateResponse("historial.html", {
         "request": request,
         "usuario": usuario,
-        "pedidos": filtrados,
+        "pedidos": pagina_actual,
         "filtro_estado": estado or "Todos",
-        "filtro_shipment": shipment_id or "",
+        "filtro_order_id": order_id or "",
         "filtro_logistica": logistica or "",
         "filtro_fecha_desde": fecha_desde or "",
         "filtro_fecha_hasta": fecha_hasta or "",
@@ -330,22 +329,12 @@ async def escanear_get(request: Request, current_user: dict = Depends(get_curren
     return templates.TemplateResponse("escanear.html", {"request": request, "usuario": current_user["username"]})
 
 @app.post("/escanear", response_class=JSONResponse)
-async def escanear_post(
-    request: Request,
-    order_id: str = Form(None),
-    shipment_id: str = Form(None),
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def escanear_post(request: Request, order_id: str = Form(None), shipment_id: str = Form(None), current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
     detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
 
     if detalle.get("cliente") == "Error" or not detalle.get("items"):
         return {"success": False, "error": "Pedido Cancelado"}
 
-    # 🔧 Enriquecer ítems con datos del Web Service
-    await enriquecer_items_ws(detalle["items"], db)
-
-    # 💾 Guardar internamente si no existe
     if not any(p["shipment_id"] == shipment_id for p in get_all_pedidos(shipment_id=shipment_id)):
         primer_oid = detalle.get("primer_order_id")
         if primer_oid:
@@ -356,6 +345,7 @@ async def escanear_post(
             add_order_if_not_exists({"cliente": detalle["cliente"], "items": mini})
 
     return {"success": True, "detalle": detalle}
+
 
 
 @app.post("/decode-qr", response_class=JSONResponse)

@@ -1,60 +1,8 @@
 {% extends "base.html" %}
-<<<<<<< HEAD
-{% block title %}Nombre de la página{% endblock %}
-=======
 {% block title %}Historial de Pedidos{% endblock %}
 
->>>>>>> 68d8912 (Actualizacion WebHook)
 {% block content %}
 
-<<<<<<< HEAD
-      <!-- ========================
-           FORM: Filtros
-           ======================== -->
-      <form method="get" class="form-filters mb-4">
-        <div class="filter">
-          <label for="estado">Estado</label>
-          <select id="estado" name="estado" class="select-input">
-            <option value="Todos"    {% if filtro_estado=="Todos" %}selected{% endif %}>Todos</option>
-            <option value="pendiente" {% if filtro_estado=="pendiente" %}selected{% endif %}>Pendiente</option>
-            <option value="armado"    {% if filtro_estado=="armado" %}selected{% endif %}>Armado</option>
-            <option value="despachado"{% if filtro_estado=="despachado" %}selected{% endif %}>Despachado</option>
-          </select>
-        </div>
-
-        <div class="filter">
-          <label for="shipment_id">Shipment ID</label>
-          <input
-            type="text"
-            id="shipment_id"
-            name="shipment_id"
-            class="text-input"
-            placeholder="Filtrar por Shipment"
-            value="{{ filtro_shipment }}"
-          />
-        </div>
-
-        <div class="filter">
-          <label for="logistica">Logística</label>
-          <input
-            type="text"
-            id="logistica"
-            name="logistica"
-            class="text-input"
-            placeholder="Filtrar por Logística"
-            value="{{ filtro_logistica }}"
-          />
-        </div>
-
-        <div class="filter filter--button">
-          <button type="submit" class="btn btn-primary">Filtrar</button>
-        </div>
-      </form>
-
-      <!-- ========================
-           TABLA de resultados
-           ======================== -->
-=======
 <div class="form-wrapper">
   <form id="form-filtros" method="get">
     <div class="card mb-4">
@@ -120,7 +68,6 @@
 <div class="card mb-4">
   <div class="card-body">
     {% if pedidos %}
->>>>>>> 68d8912 (Actualizacion WebHook)
       <div class="table-responsive">
         <table class="history-table">
           <thead>
@@ -132,28 +79,12 @@
               <th>Estado</th>
               <th>Fecha Despacho</th>
               <th>Logística</th>
+              <th>Usuario Armado</th>
               <th>Usuario Despacho</th>
             </tr>
           </thead>
           <tbody>
-<<<<<<< HEAD
-            {% if pedidos %}
-              {% for p in pedidos %}
-                <tr>
-                  <td>{{ p.order_id }}</td>
-                  <td>{{ p.cliente }}</td>
-                  <td>{{ p.titulo }}</td>
-                  <td>{{ p.cantidad }}</td>
-                  <td>{{ p.estado|capitalize }}</td>
-                  <td>{{ p.fecha_despacho or "—" }}</td>
-                  <td>{{ p.logistica or "—" }}</td>
-                  <td>{{ p.usuario_despacho or "—" }}</td>
-                </tr>
-              {% endfor %}
-            {% else %}
-=======
             {% for p in pedidos %}
->>>>>>> 68d8912 (Actualizacion WebHook)
               <tr>
                 <td>{{ p.order_id }}</td>
                 <td>{{ p.cliente }}</td>
@@ -173,9 +104,6 @@
       <p style="text-align: center; padding: 2rem;">No hay pedidos que mostrar.</p>
     {% endif %}
   </div>
-<<<<<<< HEAD
-</main>
-=======
 </div>
 
 <!-- Paginación -->
@@ -399,5 +327,4 @@ button, a.btn {
 }
 </style>
 
->>>>>>> 68d8912 (Actualizacion WebHook)
 {% endblock %}
