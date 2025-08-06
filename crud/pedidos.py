@@ -61,7 +61,7 @@ def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, us
         print(f"⚠️ Pedido con shipment_id={shipment_id} está en estado: {pedido.estado}")
         return False
 
-    if pedido.estado_ml == "cancelled":
+    if pedido.estado == "cancelled":
         print(f"🚫 El pedido {shipment_id} fue cancelado en Mercado Libre. No puede despacharse.")
         return False
     
