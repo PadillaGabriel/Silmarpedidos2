@@ -52,7 +52,6 @@ class MLPedidoCache(Base):
     estado_ml = Column(String, nullable=True)
     detalle = Column(JSON, nullable=True)
     fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
-    fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
     tiene_devolucion = Column(Boolean, default=False) 
 
 class MLItem(Base):

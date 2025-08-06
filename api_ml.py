@@ -190,7 +190,7 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     headers = {"Authorization": f"Bearer {token}"}
     TTL_MINUTOS = 10
 
-    # 1️⃣ Intentar traer desde cache si es shipment_id
+    # 1️⃣ Intentar traer desde cache
     if db and shipment_id:
         cache = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).first()
         if cache and cache.fecha_consulta and datetime.now(timezone.utc) - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
@@ -214,7 +214,7 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
             od["id"] = order_id
             shipment_id = str(od.get("shipping", {}).get("id") or "")
 
-            await guardar_pedido_en_cache(od, db, order_id)  # Se pasa order_id explícito
+            await guardar_pedido_en_cache(od, db, order_id)
             parsed = parse_order_data(od)
             parsed["primer_order_id"] = order_id
             parsed["shipment_id"] = shipment_id
@@ -222,14 +222,7 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
         except Exception as e:
             logger.warning("Error consultando o procesando la orden %s: %s", order_id, e)
 
-    # 3️⃣ Si tenés shipment_id, ejecutar flujo completo como ya tenés
-    # (... no repito por brevedad, ya está bien armado en tu versión actual ...)
-
-    logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
-    return {"cliente": "Error", "items": [], "primer_order_id": None}
-
-         
-    # 3️⃣ SHIPMENT_ID FLUJO COMPLETO
+    # 3️⃣ SHIPMENT_ID FLUJO COMPLETO (esto estaba mal ubicado)
     if shipment_id:
         try:
             shipment_items = fetch_api(
@@ -245,12 +238,8 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
                 shipment_status = "desconocido"
 
             estado_traducido = {
-                "pending": "Pendiente",
-                "ready_to_ship": "Listo para armar",
-                "shipped": "Enviado",
-                "delivered": "Entregado",
-                "not_delivered": "No entregado",
-                "cancelled": "Cancelado",
+                "pending": "Pendiente", "ready_to_ship": "Listo para armar", "shipped": "Enviado",
+                "delivered": "Entregado", "not_delivered": "No entregado", "cancelled": "Cancelado",
                 "returned": "Devuelto"
             }
             estado_envio = estado_traducido.get(shipment_status, shipment_status.capitalize())
@@ -291,11 +280,8 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
                             all_items.extend(detalle_unico["items"])
                         break
 
-            # 🔁 Agregamos permalinks en paralelo
             await enriquecer_permalinks(all_items, token, db)
-            # 🔁 Enriquecer en paralelo (si querés):
             await enriquecer_items_ws(all_items, db)
-
 
             if all_items:
                 resultado = {
@@ -326,6 +312,7 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
         except Exception as e:
             logger.warning("Error procesando /shipments/%s/items: %s", shipment_id, e)
 
+    # 4️⃣ Si no encontramos nada
     logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
     return {"cliente": "Error", "items": [], "primer_order_id": None}
 
@@ -359,18 +346,28 @@ def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: 
 
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
     try:
+        # Obtener datos del pedido
         shipment_id = pedido.get("shipping", {}).get("id")
+        if shipment_id is None:
+            print(f"⚠️ Pedido {order_id} no tiene shipment_id. No se guarda en cache.")
+            return
+
+        shipment_id = str(shipment_id)  # 🔁 Para evitar problemas de tipo
+
         cliente = pedido.get("buyer", {}).get("nickname", "")
         estado_ml = pedido.get("status", "unknown")
         estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
 
+        # Parsear ítems
         parsed = parse_order_data(pedido)
         items = parsed.get("items", [])
 
+        # Enriquecer
         token = get_valid_token()
         await enriquecer_permalinks(items, token, db)
         await enriquecer_items_ws(items, db)
 
+        # Guardar
         guardar_pedido_cache(
             db=db,
             shipment_id=shipment_id,
