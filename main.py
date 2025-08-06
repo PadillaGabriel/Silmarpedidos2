@@ -9,7 +9,7 @@ import httpx
 
 from io import StringIO
 from urllib.parse import urlencode
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
