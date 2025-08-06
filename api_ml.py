@@ -202,6 +202,10 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
             od["id"] = order_id  # asegurarse que tenga "id"
             await guardar_pedido_en_cache(od, db)
             parsed = parse_order_data(od)
+
+            shipment_id = od.get("shipping", {}).get("id")
+            parsed["shipment_id"] = str(shipment_id) if shipment_id else None  # ✅ necesario
+
             parsed["primer_order_id"] = order_id
             return parsed
         except Exception as e:
