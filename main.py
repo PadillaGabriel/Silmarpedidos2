@@ -57,17 +57,11 @@ from api_ml import fetch_api, get_order_details,parse_order_data, guardar_pedido
 
 
 # Webhooks
-from webhooks import webhooks  # 👈 importa el router desde webhooks.py
+from webhooks import webhooks, get_db  # 👈 importa el router desde webhooks.py
 
 
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
