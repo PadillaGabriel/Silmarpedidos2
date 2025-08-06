@@ -24,7 +24,7 @@ async def recibir_webhook_ml(request: Request):
             if parsed:
                 db = SessionLocal()
                 try:
-                    await guardar_pedido_en_cache(parsed, db)  # ✅ ahora sí con await y db
+                    await guardar_pedido_en_cache(parsed, db, order_id)
                     print(f"✅ Pedido {order_id} guardado en caché")
                 finally:
                     db.close()
