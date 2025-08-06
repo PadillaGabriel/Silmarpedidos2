@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
 from api_ml import get_order_details
-from crud.pedidos import guardar_pedido_en_cache
+from api_ml import guardar_pedido_en_cache
 
 webhooks = APIRouter()
 

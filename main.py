@@ -439,6 +439,3 @@ async def despachar_post(
     return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
 
 
-
-
-
