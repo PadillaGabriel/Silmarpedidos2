@@ -56,9 +56,6 @@ from api_ml import fetch_api, get_order_details,parse_order_data, guardar_pedido
 from fastapi import FastAPI
 from webhooks import webhooks  # 👈 importa el router desde webhooks.py
 
-app = FastAPI()
-
-app.include_router(webhooks, prefix="/webhooks")  # 👈 monta el router en /webhooks
 
 
 
