@@ -5,6 +5,7 @@ import logging
 import requests
 import aiohttp
 import asyncio
+import os
 from sqlalchemy.orm import Session
 
 from crud.utils import enriquecer_permalinks 
@@ -332,8 +333,13 @@ def guardar_pedido_cache(
     try:
         # 🧠 Detectar logistic_type del primer ítem
         logistic_type = None
+        logistic_type = None
         if isinstance(detalle, list) and len(detalle) > 0:
             logistic_type = detalle[0].get("logistic_type")
+
+        # 🧪 Fallback si vino None
+        if logistic_type is None:
+            logistic_type = obtener_logistic_type_desde_envio(shipment_id)
 
         cache = MLPedidoCache(
             shipment_id=shipment_id,
@@ -398,3 +404,16 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
         print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
     except Exception as e:
         print(f"❌ Error al guardar pedido {order_id}: {e}")
+
+
+def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
+    try:
+        token = os.getenv("ML_ACCESS_TOKEN")
+        url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(url, headers=headers)
+        if r.ok:
+            return r.json().get("logistic", {}).get("type")
+    except Exception as e:
+        print(f"⚠️ Error al obtener logistic_type de shipment {shipment_id}: {e}")
+    return None
