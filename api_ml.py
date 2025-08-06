@@ -199,18 +199,23 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     if order_id:
         try:
             od = fetch_api(f"/orders/{order_id}", extra_headers=headers)
-            od["id"] = order_id  # asegurarse que tenga "id"
-            await guardar_pedido_en_cache(od, db)
-            parsed = parse_order_data(od)
-
+            od["id"] = order_id
             shipment_id = od.get("shipping", {}).get("id")
-            parsed["shipment_id"] = str(shipment_id) if shipment_id else None  # ✅ necesario
+            if not shipment_id:
+                print(f"⚠️  El pedido {order_id} no tiene shipment_id, se guardará como None.")
 
+
+
+            await guardar_pedido_en_cache(od, db, order_id)
+
+
+            parsed = parse_order_data(od)
             parsed["primer_order_id"] = order_id
+            parsed["shipment_id"] = shipment_id
             return parsed
         except Exception as e:
             logger.warning("/orders/%s devolvió error: %s", order_id, e)
-
+         
     # 3️⃣ SHIPMENT_ID FLUJO COMPLETO
     if shipment_id:
         try:
