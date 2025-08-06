@@ -9,6 +9,7 @@ webhooks = APIRouter()
 async def recibir_webhook_ml(request: Request):
     try:
         data = await request.json()
+        print("📦 Webhook recibido (raw JSON):", data)  # 👈👈 MOSTRAR EL JSON RECIBIDO
     except Exception as e:
         print("❌ Error al leer el cuerpo del webhook:", e)
         return {"status": "error", "detail": "Invalid JSON"}

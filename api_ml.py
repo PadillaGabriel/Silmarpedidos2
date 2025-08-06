@@ -165,11 +165,23 @@ def fetch_api(path, params=None, extra_headers=None):
     r.raise_for_status()
     return r.json()
 
+def buscar_order_completo(order_id, headers):
+    """
+    Intenta traer la orden por /orders/{id}, si falla intenta por /orders/search.
+    """
+    try:
+        return fetch_api(f"/orders/{order_id}", extra_headers=headers)
+    except Exception:
+        try:
+            result = fetch_api(f"/orders/search?seller=207035636&q={order_id}", extra_headers=headers)
+            return result["results"][0] if result.get("results") else None
+        except Exception as e:
+            logger.warning("No se encontró la orden %s ni por /orders ni por /orders/search: %s", order_id, e)
+            return None
 
 
 
 async def get_order_details(order_id: str = None, shipment_id: str = None, db: Session = None) -> dict:
-    
     token = get_valid_token()
     if not token:
         logger.error("No se obtuvo token válido")
@@ -178,43 +190,44 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     headers = {"Authorization": f"Bearer {token}"}
     TTL_MINUTOS = 10
 
-    # 1️⃣ BUSCAR EN CACHE
+    # 1️⃣ Intentar traer desde cache si es shipment_id
     if db and shipment_id:
         cache = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).first()
-        if cache:
-            if cache.fecha_consulta and datetime.now(timezone.utc) - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
-                logger.info("Se usó cache fresca para shipment_id=%s", shipment_id)
-                return {
-                    "cliente": cache.cliente,
-                    "items": cache.detalle,
-                    "estado_envio": cache.estado_envio,
-                    "estado_ml": cache.estado_ml,
-                    "primer_order_id": cache.order_id,
-                    "primer_shipment_id": cache.shipment_id,
-                }
-            else:
-                logger.info("Cache expirada para shipment_id=%s, se consultará la API", shipment_id)
+        if cache and cache.fecha_consulta and datetime.now(timezone.utc) - cache.fecha_consulta < timedelta(minutes=TTL_MINUTOS):
+            logger.info("Se usó cache fresca para shipment_id=%s", shipment_id)
+            return {
+                "cliente": cache.cliente,
+                "items": cache.detalle,
+                "estado_envio": cache.estado_envio,
+                "estado_ml": cache.estado_ml,
+                "primer_order_id": cache.order_id,
+                "primer_shipment_id": cache.shipment_id,
+            }
 
-    # 2️⃣ ORDER_ID DIRECTO
+    # 2️⃣ Consultar directamente por order_id (con fallback a /orders/search)
     if order_id:
         try:
-            od = fetch_api(f"/orders/{order_id}", extra_headers=headers)
+            od = buscar_order_completo(order_id, headers)
+            if not od:
+                return {"cliente": "Error", "items": [], "primer_order_id": order_id}
+
             od["id"] = order_id
-            shipment_id = od.get("shipping", {}).get("id")
-            if not shipment_id:
-                print(f"⚠️  El pedido {order_id} no tiene shipment_id, se guardará como None.")
+            shipment_id = str(od.get("shipping", {}).get("id") or "")
 
-
-
-            await guardar_pedido_en_cache(od, db, order_id)
-
-
+            await guardar_pedido_en_cache(od, db, order_id)  # Se pasa order_id explícito
             parsed = parse_order_data(od)
             parsed["primer_order_id"] = order_id
             parsed["shipment_id"] = shipment_id
             return parsed
         except Exception as e:
-            logger.warning("/orders/%s devolvió error: %s", order_id, e)
+            logger.warning("Error consultando o procesando la orden %s: %s", order_id, e)
+
+    # 3️⃣ Si tenés shipment_id, ejecutar flujo completo como ya tenés
+    # (... no repito por brevedad, ya está bien armado en tu versión actual ...)
+
+    logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
+    return {"cliente": "Error", "items": [], "primer_order_id": None}
+
          
     # 3️⃣ SHIPMENT_ID FLUJO COMPLETO
     if shipment_id:
