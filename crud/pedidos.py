@@ -61,9 +61,9 @@ def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, us
         print(f"⚠️ Pedido con shipment_id={shipment_id} está en estado: {pedido.estado}")
         return False
 
-    if pedido.estado == "cancelled":
-        print(f"🚫 El pedido {shipment_id} fue cancelado en Mercado Libre. No puede despacharse.")
-        return False
+    pedido_cache = db.query(MLPedidoCache).filter_by(order_id=pedido.order_id).first()
+    if pedido_cache and pedido_cache.estado_ml == "cancelled":
+        raise Exception("🚫 El pedido está cancelado y no se puede despachar.")
     
     # Actualizar estado
     pedido.estado = "despachado"
