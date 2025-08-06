@@ -395,13 +395,17 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
         estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
 
         # Parsear ítems
-        parsed = parse_order_data(pedido)
-        items = parsed.get("items", [])
+        items = pedido.get("order_items", [])
+        if not items:
+            items = pedido.get("items", [])
 
         # Enriquecer
         token = get_valid_token()
-        await enriquecer_permalinks(items, token, db)
-        await enriquecer_items_ws(items, db)
+        if items:
+            await enriquecer_permalinks(items, token, db)
+            await enriquecer_items_ws(items, db)
+        else:
+            print(f"⚠️ Pedido {order_id} no tiene ítems para enriquecer.")
 
         # Guardar
         guardar_pedido_cache(
