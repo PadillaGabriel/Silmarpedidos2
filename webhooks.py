@@ -5,12 +5,6 @@ from database.connection import SessionLocal
 
 webhooks = APIRouter()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @webhooks.post("/ml")
 async def recibir_webhook_ml(request: Request):
