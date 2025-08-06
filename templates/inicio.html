@@ -17,29 +17,32 @@
     <!-- FLEX -->
     <div class="resumen-card flex">
       <h3>Flex</h3>
-      <p><strong>{{ flex_armados }}</strong> de <strong>{{ flex_total }}</strong> pedidos armados</p>
-      <progress max="{{ flex_total }}" value="{{ flex_armados }}"></progress>
+      <p><strong>{{ flex_armados or 0 }}</strong> de <strong>{{ flex_total or 0 }}</strong> pedidos armados</p>
+      <progress max="{{ flex_total or 1 }}" value="{{ flex_armados or 0 }}"></progress>
+
     </div>
 
     <!-- COLECTA -->
     <div class="resumen-card colecta">
       <h3>Colecta</h3>
-      <p><strong>{{ colecta_armados }}</strong> de <strong>{{ colecta_total }}</strong> pedidos armados</p>
-      <progress max="{{ colecta_total }}" value="{{ colecta_armados }}"></progress>
+      <p><strong>{{ colecta_armados or 0 }}</strong> de <strong>{{ colecta_total or 0 }}</strong> pedidos armados</p>
+      <progress max="{{ colecta_total or 1 }}" value="{{ colecta_armados or 0 }}"></progress>
+
     </div>
 
     <!-- CANCELADOS -->
     <div class="resumen-card cancelados">
       <h3>Cancelados hoy</h3>
-      {% if cancelados %}
-        <ul>
-          {% for id in cancelados %}
-            <li><code>{{ id }}</code></li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>✅ Sin cancelados</p>
-      {% endif %}
+{% if cancelados %}
+  <ul>
+    {% for id in cancelados %}
+      <li><code>{{ id }}</code></li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>✅ Sin cancelados</p>
+{% endif %}
+
     </div>
 
   </div>

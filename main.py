@@ -453,7 +453,7 @@ def resumen_dashboard(db: Session = Depends(get_db)):
     flex_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
         MLPedidoCache.fecha_consulta.between(ayer_14, hoy_14),
-        MLPedidoCache.detalle.contains([{"logistic_type": "fulfillment"}])
+        MLPedidoCache.logistic_type == 'fulfillment'
     )
 
     flex_total = flex_query_base\
@@ -466,14 +466,14 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .filter(
             Pedido.estado == 'armado',
             Pedido.fecha_armado.between(ayer_14, hoy_14),
-            MLPedidoCache.detalle.contains([{"logistic_type": "fulfillment"}])
+            MLPedidoCache.logistic_type == 'fulfillment'
         ).count()
 
     # 🏬 COLECTA: tipo 'cross_docking'
     colecta_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
         MLPedidoCache.fecha_consulta >= hoy,
-        MLPedidoCache.detalle.contains([{"logistic_type": "cross_docking"}])
+        MLPedidoCache.logistic_type == 'cross_docking'
     )
 
     colecta_total = colecta_query_base\
@@ -486,7 +486,7 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .filter(
             Pedido.estado == 'armado',
             Pedido.fecha_armado >= hoy,
-            MLPedidoCache.detalle.contains([{"logistic_type": "cross_docking"}])
+            MLPedidoCache.logistic_type == 'cross_docking'
         ).count()
 
     # ❌ Cancelados de hoy
