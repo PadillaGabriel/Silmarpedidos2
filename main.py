@@ -426,7 +426,18 @@ async def despachar_post(
     if not id_buscar:
         return {"success": False, "error": "Falta ID"}
 
-    # Verificar estado del envío
+    # ✅ Validar si está cancelado localmente
+    pedido_cache = db.query(MLPedidoCache).filter(
+        or_(
+            MLPedidoCache.order_id == id_buscar,
+            MLPedidoCache.shipment_id == id_buscar
+        )
+    ).first()
+
+    if pedido_cache and pedido_cache.estado_ml == "cancelled":
+        return {"success": False, "error": "El pedido está cancelado (registro local)."}
+
+    # ✅ Intentar validar con la API oficial si hay token
     token = os.getenv("ML_ACCESS_TOKEN")
     if token:
         url = f"https://api.mercadolibre.com/shipments/{id_buscar}"
@@ -435,12 +446,14 @@ async def despachar_post(
         if r.ok:
             data = r.json()
             if data.get("status") == "cancelled":
-                return {"success": False, "error": "El pedido fue cancelado. No puede despacharse."}
+                return {"success": False, "error": "El pedido está cancelado (API de ML)."}
 
-    # ✅ Ya no se valida checklist
-    ok = marcar_pedido_despachado(db,id_buscar, logistica, tipo_envio, usuario)
-    return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
-
+    # 🚚 Continuar con el despacho
+    ok = marcar_pedido_despachado(db, id_buscar, logistica, tipo_envio, usuario)
+    return {
+        "success": ok,
+        "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"
+    }
 
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):

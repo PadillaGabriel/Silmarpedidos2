@@ -348,6 +348,9 @@ def guardar_pedido_cache(
         db.merge(cache)
         db.commit()
         print(f"💾 Pedido {order_id} commit a la base de datos")
+        print(f"🧪 logistic_type extraído: {logistic_type}")
+        print(f"🧩 detalle[0]: {detalle[0]}")
+
 
         verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
         if verificado:
