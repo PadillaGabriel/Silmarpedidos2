@@ -49,11 +49,16 @@ from ws.items import buscar_item_por_sku
 from ws.catalogo import actualizar_ws_items
 
 # Lógica ML
-from api_ml import fetch_api, get_order_details,parse_order_data
+from api_ml import fetch_api, get_order_details,parse_order_data, guardar_pedido_en_cache
 
 
 # Webhooks
-from webhooks import webhooks
+from fastapi import FastAPI
+from webhooks import webhooks  # 👈 importa el router desde webhooks.py
+
+app = FastAPI()
+
+app.include_router(webhooks, prefix="/webhooks")  # 👈 monta el router en /webhooks
 
 
 
@@ -440,44 +445,3 @@ async def despachar_post(
 
 
 
-@router.post("/webhooks/ml")
-
-async def recibir_webhook_ml(request: Request, db: Session = Depends(get_db)):
-    print("📥 Webhook recibido:", body)
-    body = await request.json()
-    topic = body.get("topic")
-    resource = body.get("resource")
-
-    if not resource or "/orders/" not in resource:
-        logger.warning("❌ Webhook sin order_id válido")
-        return {"status": "ignored"}
-
-    order_id = resource.split("/")[-1]
-    logger.info("🔔 Webhook recibido - order_id=%s", order_id)
-
-    try:
-        order_data = fetch_api(f"/orders/{order_id}")
-        shipment_id = order_data.get("shipping", {}).get("id")
-
-        if shipment_id:
-            logger.info("📦 Procesando por shipment_id=%s", shipment_id)
-            await get_order_details(shipment_id=shipment_id, db=db)
-        else:
-            logger.info("🔄 No hay shipment_id, usando order_id")
-            parsed = parse_order_data(order_data)
-            nuevo = MLPedidoCache(
-                shipment_id=None,
-                order_id=order_id,
-                cliente=parsed["cliente"],
-                estado_envio="—",
-                estado_ml="—",
-                detalle=parsed["items"]
-            )
-            db.merge(nuevo)
-            db.commit()
-            logger.info("✅ Pedido guardado solo con order_id")
-
-    except Exception as e:
-        logger.error("💥 Error procesando order_id=%s: %s", order_id, e)
-
-    return {"status": "ok"}
