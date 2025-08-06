@@ -455,17 +455,23 @@ async def despachar_post(
         "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"
     }
 
+from datetime import datetime, timedelta, timezone
+
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):
     ahora = datetime.now()
     hoy = ahora.date()
-    ayer_14 = (datetime.combine(hoy - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
-    hoy_14 = (datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
+    
+    # Definir ventana de despacho siguiente (de hoy 14hs a mañana 14hs)
+    desde = (datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
+    hasta = (datetime.combine(hoy + timedelta(days=1), datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
 
-    # 🚚 FLEX: tipo 'fulfillment'
+    print("🧪 Ventana de conteo:", desde, "→", hasta)
+
+    # FLEX: self_service
     flex_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta.between(ayer_14, hoy_14),
+        MLPedidoCache.fecha_consulta.between(desde, hasta),
         MLPedidoCache.logistic_type == 'self_service'
     )
 
@@ -478,14 +484,14 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
         .filter(
             Pedido.estado == 'armado',
-            Pedido.fecha_armado.between(ayer_14, hoy_14),
+            Pedido.fecha_armado.between(desde, hasta),
             MLPedidoCache.logistic_type == 'self_service'
         ).count()
 
-    # 🏬 COLECTA: tipo 'cross_docking'
+    # COLECTA: cross_docking
     colecta_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta >= hoy,
+        MLPedidoCache.fecha_consulta.between(desde, hasta),
         MLPedidoCache.logistic_type == 'cross_docking'
     )
 
@@ -498,15 +504,14 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
         .filter(
             Pedido.estado == 'armado',
-            Pedido.fecha_armado >= hoy,
+            Pedido.fecha_armado.between(desde, hasta),
             MLPedidoCache.logistic_type == 'cross_docking'
         ).count()
 
-    # ❌ Cancelados de hoy
     cancelados = db.query(MLPedidoCache.order_id)\
         .filter(
             MLPedidoCache.estado_ml == 'cancelled',
-            MLPedidoCache.fecha_consulta >= hoy
+            MLPedidoCache.fecha_consulta.between(desde, hasta)
         ).all()
     cancelados_ids = [r[0] for r in cancelados]
 
