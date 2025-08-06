@@ -10,7 +10,6 @@ import httpx
 from io import StringIO
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
-from models import MLPedidoCache, Pedido
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
@@ -30,7 +29,7 @@ from sqlalchemy.orm import Session
 # Inicialización DB
 from database.connection import SessionLocal
 from database.init import init_db
-from database.models import Base, MLPedidoCache
+from database.models import Base, MLPedidoCache,Pedido
 
 # Autenticación
 from auth_ml import get_ml_token, obtener_token
