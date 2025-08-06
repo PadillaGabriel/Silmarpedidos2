@@ -318,22 +318,35 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
 
 
 
-def guardar_pedido_cache(db: Session, shipment_id: str, order_id: str, cliente: str, estado_envio: str, estado_ml: str, detalle: dict):
+def guardar_pedido_cache(
+    db: Session,
+    shipment_id: str,
+    order_id: str,
+    cliente: str,
+    estado_envio: str,
+    estado_ml: str,
+    detalle: dict
+):
     try:
+        # 🧠 Detectar logistic_type del primer ítem
+        logistic_type = None
+        if isinstance(detalle, list) and len(detalle) > 0:
+            logistic_type = detalle[0].get("logistic_type")
+
         cache = MLPedidoCache(
             shipment_id=shipment_id,
             order_id=order_id,
             cliente=cliente,
             estado_envio=estado_envio,
             estado_ml=estado_ml,
-            detalle=detalle
+            detalle=detalle,
+            logistic_type=logistic_type  # nuevo campo
         )
 
-        db.merge(cache)  # actualiza si ya existe
+        db.merge(cache)
         db.commit()
         print(f"💾 Pedido {order_id} commit a la base de datos")
 
-        # Validación extra
         verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
         if verificado:
             print(f"🟢 Pedido verificado en base: {verificado.order_id}")

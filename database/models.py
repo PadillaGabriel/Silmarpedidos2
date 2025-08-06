@@ -53,6 +53,7 @@ class MLPedidoCache(Base):
     detalle = Column(JSON, nullable=True)
     fecha_consulta = Column(DateTime(timezone=True), server_default=func.now())
     tiene_devolucion = Column(Boolean, default=False) 
+    logistic_type = Column(String, nullable=True, index=True)
 
 class MLItem(Base):
     __tablename__ = "ml_items_cache"

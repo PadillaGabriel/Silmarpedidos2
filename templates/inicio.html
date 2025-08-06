@@ -8,4 +8,40 @@
     <a href="/historial" class="btn btn-inicio">Historial</a>
 
   </div>
+
+<section class="dashboard-resumen">
+  <h2>📦 Resumen de Pedidos</h2>
+
+  <div class="resumen-grid">
+
+    <!-- FLEX -->
+    <div class="resumen-card flex">
+      <h3>Flex</h3>
+      <p><strong>{{ flex_armados }}</strong> de <strong>{{ flex_total }}</strong> pedidos armados</p>
+      <progress max="{{ flex_total }}" value="{{ flex_armados }}"></progress>
+    </div>
+
+    <!-- COLECTA -->
+    <div class="resumen-card colecta">
+      <h3>Colecta</h3>
+      <p><strong>{{ colecta_armados }}</strong> de <strong>{{ colecta_total }}</strong> pedidos armados</p>
+      <progress max="{{ colecta_total }}" value="{{ colecta_armados }}"></progress>
+    </div>
+
+    <!-- CANCELADOS -->
+    <div class="resumen-card cancelados">
+      <h3>Cancelados hoy</h3>
+      {% if cancelados %}
+        <ul>
+          {% for id in cancelados %}
+            <li><code>{{ id }}</code></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>✅ Sin cancelados</p>
+      {% endif %}
+    </div>
+
+  </div>
+</section>
 {% endblock %}

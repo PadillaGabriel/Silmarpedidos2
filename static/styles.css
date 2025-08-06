@@ -1482,3 +1482,46 @@ ul.config-list li {
 .password-wrapper .toggle-password svg {
   display: block;
 }
+
+.dashboard-resumen {
+  padding: 2rem;
+}
+
+.resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.resumen-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  border-left: 5px solid #999;
+}
+
+.resumen-card.flex {
+  border-color: #2c83f2;
+}
+
+.resumen-card.colecta {
+  border-color: #22bb33;
+}
+
+.resumen-card.cancelados {
+  border-color: #ff4d4d;
+}
+
+.resumen-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.resumen-card progress {
+  width: 100%;
+  height: 14px;
+  margin-top: 0.5rem;
+  appearance: none;
+}
+  

@@ -9,7 +9,11 @@ import httpx
 
 from io import StringIO
 from urllib.parse import urlencode
-from datetime import datetime
+from datetime import datetime, timedelta
+from db import get_db
+from models import MLPedidoCache, Pedido
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_
 
 from fastapi import (
     FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile, APIRouter
@@ -89,10 +93,17 @@ async def get_current_user(request: Request):
         raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/login"})
     return {"username": user}
 
+
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, db: Session = Depends(get_db)):
     usuario = request.session.get("username")
-    return templates.TemplateResponse("inicio.html", {"request": request, "usuario": usuario})
+    resumen = resumen_dashboard(db)  # función que devuelve el resumen
+
+    return templates.TemplateResponse("inicio.html", {
+        "request": request,
+        "usuario": usuario,
+        **resumen  # esto pasa flex_armados, cancelados, etc.
+    })
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
@@ -438,3 +449,65 @@ async def despachar_post(
     return {"success": ok, "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"}
 
 
+@router.get("/dashboard/resumen")
+def resumen_dashboard(db: Session = Depends(get_db)):
+    ahora = datetime.now()
+    hoy = ahora.date()
+    ayer_14 = datetime.combine(hoy - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)
+    hoy_14 = datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)
+
+    # 🚚 FLEX: tipo 'fulfillment'
+    flex_query_base = db.query(MLPedidoCache).filter(
+        MLPedidoCache.estado_ml != 'cancelled',
+        MLPedidoCache.fecha_consulta.between(ayer_14, hoy_14),
+        MLPedidoCache.detalle.contains([{"logistic_type": "fulfillment"}])
+    )
+
+    flex_total = flex_query_base\
+        .outerjoin(Pedido, MLPedidoCache.order_id == Pedido.order_id)\
+        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
+        .count()
+
+    flex_armados = db.query(Pedido)\
+        .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
+        .filter(
+            Pedido.estado == 'armado',
+            Pedido.fecha_armado.between(ayer_14, hoy_14),
+            MLPedidoCache.detalle.contains([{"logistic_type": "fulfillment"}])
+        ).count()
+
+    # 🏬 COLECTA: tipo 'cross_docking'
+    colecta_query_base = db.query(MLPedidoCache).filter(
+        MLPedidoCache.estado_ml != 'cancelled',
+        MLPedidoCache.fecha_consulta >= hoy,
+        MLPedidoCache.detalle.contains([{"logistic_type": "cross_docking"}])
+    )
+
+    colecta_total = colecta_query_base\
+        .outerjoin(Pedido, MLPedidoCache.order_id == Pedido.order_id)\
+        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
+        .count()
+
+    colecta_armados = db.query(Pedido)\
+        .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
+        .filter(
+            Pedido.estado == 'armado',
+            Pedido.fecha_armado >= hoy,
+            MLPedidoCache.detalle.contains([{"logistic_type": "cross_docking"}])
+        ).count()
+
+    # ❌ Cancelados de hoy
+    cancelados = db.query(MLPedidoCache.order_id)\
+        .filter(
+            MLPedidoCache.estado_ml == 'cancelled',
+            MLPedidoCache.fecha_consulta >= hoy
+        ).all()
+    cancelados_ids = [r[0] for r in cancelados]
+
+    return {
+        "flex_total": flex_total,
+        "flex_armados": flex_armados,
+        "colecta_total": colecta_total,
+        "colecta_armados": colecta_armados,
+        "cancelados": cancelados_ids
+    }
