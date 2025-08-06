@@ -371,12 +371,27 @@ def guardar_pedido_cache(
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
     try:
         # Obtener datos del pedido
-        shipment_id = pedido.get("shipping", {}).get("id")
-        if shipment_id is None:
+        shipment_id = (
+            pedido.get("shipping", {}).get("id") or
+            pedido.get("shipping", {}).get("shipment_id") or
+            pedido.get("shipment", {}).get("id")
+        )
+
+        # Si no lo encontramos en el JSON original, lo buscamos con fallback
+        if not shipment_id:
+            # Último intento: usar la API si hay token
+            token = get_valid_token()
+            url = f"https://api.mercadolibre.com/orders/{order_id}"
+            headers = {"Authorization": f"Bearer {token}"}
+            r = requests.get(url, headers=headers)
+            if r.ok:
+                shipment_id = r.json().get("shipping", {}).get("id")
+
+        if not shipment_id:
             print(f"⚠️ Pedido {order_id} no tiene shipment_id. No se guarda en cache.")
             return
 
-        shipment_id = str(shipment_id)  # 🔁 Para evitar problemas de tipo
+        shipment_id = str(shipment_id)
 
         cliente = pedido.get("buyer", {}).get("nickname", "")
         estado_ml = pedido.get("status", "unknown")
