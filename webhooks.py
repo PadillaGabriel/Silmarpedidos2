@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from api_ml import get_order_details
 from api_ml import guardar_pedido_en_cache
+from database.connection import SessionLocal
 
 webhooks = APIRouter()
 
@@ -21,8 +22,12 @@ async def recibir_webhook_ml(request: Request):
         try:
             parsed = await get_order_details(order_id)
             if parsed:
-                guardar_pedido_en_cache(parsed)
-                print(f"✅ Pedido {order_id} guardado en caché")
+                db = SessionLocal()
+                try:
+                    await guardar_pedido_en_cache(parsed, db)  # ✅ ahora sí con await y db
+                    print(f"✅ Pedido {order_id} guardado en caché")
+                finally:
+                    db.close()
             else:
                 print(f"⚠️ Pedido {order_id} vacío o inválido")
         except Exception as e:
