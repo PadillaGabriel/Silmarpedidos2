@@ -49,10 +49,12 @@ def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, us
     ahora = datetime.now()
 
     # Buscar el pedido en la tabla "pedidos"
-    pedido = db.query(Pedido).filter_by(shipment_id=shipment_id).first()
+    pedido = db.query(Pedido).filter(
+        (Pedido.shipment_id == shipment_id) | (Pedido.order_id == shipment_id)
+    ).first()
 
     if not pedido:
-        print(f"❌ Pedido con shipment_id={shipment_id} no encontrado en la tabla pedidos.")
+        print(f"❌ Pedido con shipment_id={shipment_id} o order_id={shipment_id} no encontrado en la tabla pedidos.")
         return False
 
     if pedido.estado != "armado":
