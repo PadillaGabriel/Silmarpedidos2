@@ -45,8 +45,8 @@ class WsItem(Base):
 class MLPedidoCache(Base):
     __tablename__ = "ml_pedidos_cache"
 
-    shipment_id = Column(String, primary_key=True, index=True)
-    order_id = Column(String, nullable=True)
+    shipment_id = Column(String,nullable=True , index=True)
+    order_id = Column(String, primary_key=True)
     cliente = Column(String, nullable=True)
     estado_envio = Column(String, nullable=True)
     estado_ml = Column(String, nullable=True)

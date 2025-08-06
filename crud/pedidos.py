@@ -45,19 +45,30 @@ def marcar_envio_armado(shipment_id, usuario):
     session.close()
     return filas > 0
 
-def marcar_pedido_despachado(shipment_id, logistica, tipo_envio, usuario):
-    session = SessionLocal()
+def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
     ahora = datetime.now()
-    filas = session.query(Pedido).filter_by(shipment_id=shipment_id, estado="armado").update({
-        Pedido.estado: "despachado",
-        Pedido.fecha_despacho: ahora,
-        Pedido.logistica: logistica,
-        Pedido.tipo_envio: tipo_envio,
-        Pedido.usuario_despacho: usuario
-    })
-    session.commit()
-    session.close()
-    return filas > 0
+
+    # Buscar el pedido en la tabla "pedidos"
+    pedido = db.query(Pedido).filter_by(shipment_id=shipment_id).first()
+
+    if not pedido:
+        print(f"❌ Pedido con shipment_id={shipment_id} no encontrado en la tabla pedidos.")
+        return False
+
+    if pedido.estado != "armado":
+        print(f"⚠️ Pedido con shipment_id={shipment_id} está en estado '{pedido.estado}' y no puede ser despachado.")
+        return False
+
+    # Actualizar estado
+    pedido.estado = "despachado"
+    pedido.fecha_despacho = ahora
+    pedido.logistica = logistica
+    pedido.tipo_envio = tipo_envio
+    pedido.usuario_despacho = usuario
+
+    db.commit()
+    print(f"✅ Pedido {shipment_id} marcado como despachado por {usuario}")
+    return True
 
 def get_estado_envio(shipment_id):
     session = SessionLocal()
