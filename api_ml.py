@@ -103,14 +103,16 @@ def parse_order_data(order_data: dict) -> dict:
             imgs = [{"url": DEFAULT_IMG_LOCAL, "thumbnail": DEFAULT_IMG_LOCAL}]
 
         items.append({
-            "titulo":   titulo,
-            "sku":      sku,
-            "variante": variante,
-            "cantidad": cantidad,
-            "imagenes": imgs,
-            "item_id": prod.get("id"),
-            "variation_id": prod.get("variation_id")
-        })
+        "titulo":   titulo,
+        "sku":      sku,
+        "variante": variante,
+        "cantidad": cantidad,
+        "imagenes": imgs,
+        "item_id": prod.get("id"),
+        "variation_id": prod.get("variation_id"),
+        "logistic_type": order_data.get("shipping", {}).get("logistic_type")  # ✅ aquí
+})
+
 
     return {"cliente": cliente, "items": items}
 
