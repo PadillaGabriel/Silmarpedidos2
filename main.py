@@ -459,8 +459,8 @@ async def despachar_post(
 def resumen_dashboard(db: Session = Depends(get_db)):
     ahora = datetime.now()
     hoy = ahora.date()
-    ayer_14 = datetime.combine(hoy - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)
-    hoy_14 = datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)
+    ayer_14 = (datetime.combine(hoy - timedelta(days=1), datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
+    hoy_14 = (datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
 
     # 🚚 FLEX: tipo 'fulfillment'
     flex_query_base = db.query(MLPedidoCache).filter(
