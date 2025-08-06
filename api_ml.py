@@ -324,10 +324,12 @@ def guardar_pedido_cache(
     detalle: dict
 ):
     try:
-        # 🧠 Detectar logistic_type del primer ítem
-        logistic_type = None
-        if isinstance(detalle, list) and len(detalle) > 0:
-            logistic_type = detalle[0].get("logistic_type")
+        # 🧠 Obtener logistic_type desde el envío directamente
+        logistic_type = obtener_logistic_type_desde_envio(shipment_id)
+
+        # (Opcional) Asignarlo a cada ítem también
+        for item in detalle:
+            item["logistic_type"] = logistic_type
 
         cache = MLPedidoCache(
             shipment_id=shipment_id,
@@ -418,12 +420,12 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
 
 def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
     try:
-        token = os.getenv("ML_ACCESS_TOKEN")
+        token = get_valid_token()
         url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
         headers = {"Authorization": f"Bearer {token}"}
         r = requests.get(url, headers=headers)
         if r.ok:
-            return r.json().get("logistic", {}).get("type")
+            return r.json().get("logistic_type")
     except Exception as e:
         print(f"⚠️ Error al obtener logistic_type de shipment {shipment_id}: {e}")
     return None
