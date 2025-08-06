@@ -333,13 +333,8 @@ def guardar_pedido_cache(
     try:
         # 🧠 Detectar logistic_type del primer ítem
         logistic_type = None
-        logistic_type = None
         if isinstance(detalle, list) and len(detalle) > 0:
             logistic_type = detalle[0].get("logistic_type")
-
-        # 🧪 Fallback si vino None
-        if logistic_type is None:
-            logistic_type = obtener_logistic_type_desde_envio(shipment_id)
 
         cache = MLPedidoCache(
             shipment_id=shipment_id,
@@ -348,15 +343,22 @@ def guardar_pedido_cache(
             estado_envio=estado_envio,
             estado_ml=estado_ml,
             detalle=detalle,
-            logistic_type=logistic_type  # nuevo campo
+            logistic_type=logistic_type
         )
 
         db.merge(cache)
         db.commit()
+
         print(f"💾 Pedido {order_id} commit a la base de datos")
         print(f"🧪 logistic_type extraído: {logistic_type}")
-        print(f"🧩 detalle[0]: {detalle[0]}")
 
+        # 🧩 Inspección segura del primer ítem
+        if isinstance(detalle, list) and len(detalle) > 0:
+            item_info = detalle[0]
+            item_id = item_info.get("item_id", "sin_item_id")
+            print(f"🧩 detalle[0] con item_id: {item_id}")
+        else:
+            print("⚠️ detalle no tiene ítems para mostrar")
 
         verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
         if verificado:
