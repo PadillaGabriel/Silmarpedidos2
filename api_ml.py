@@ -36,41 +36,34 @@ def parse_order_data(order_data: dict) -> dict:
       - variante
       - cantidad
       - imágenes
+      - logistic_type (uno por pedido)
     y devolver un diccionario con la forma:
       {
         "cliente": <nick del buyer>,
-        "items": [
-          { "titulo": ..., "sku": ..., "variante": ..., "cantidad": ..., "imagenes": [ {url, thumbnail}, ... ] },
-          ...
-        ]
+        "items": [ { ... } ]
       }
     """
     DEFAULT_IMG_LOCAL = DEFAULT_IMG
-
     cliente = order_data.get("buyer", {}).get("nickname", "Cliente desconocido")
 
+    # Capturamos el logistic_type a nivel pedido
+    logistic_type = order_data.get("shipping", {}).get("logistic_type")
+
     raw_items = order_data.get("order_items", [])
-    # En algunos casos vienen en "items" en lugar de "order_items"
     if not raw_items:
         raw_items = order_data.get("items", [])
 
     items = []
     for oi in raw_items:
-        # Si viene la forma order_items, el item real está en oi["item"]
         prod = oi.get("item", oi)
-
-        titulo   = prod.get("title", "Sin título")
+        titulo = prod.get("title", "Sin título")
         cantidad = oi.get("quantity", 0)
 
-        # Variante: revisamos variation_attributes, si existe
+        # Variante
         attrs = prod.get("variation_attributes", [])
-        if attrs:
-            variante = " | ".join(f"{a['name']}: {a['value_name']}" for a in attrs if a.get("value_name"))
-        else:
-            variante = "—"
+        variante = " | ".join(f"{a['name']}: {a['value_name']}" for a in attrs if a.get("value_name")) if attrs else "—"
 
-        # SKU: siguiendo la doc de ML, primero seller_sku de variación, sino seller_custom_field de variación,
-        # luego seller_sku de item, luego seller_custom_field de item.
+        # SKU
         sku = (
             prod.get("seller_sku")
             or prod.get("seller_custom_field")
@@ -79,24 +72,21 @@ def parse_order_data(order_data: dict) -> dict:
             or "Sin SKU"
         )
 
-        # Construir lista de imágenes:
+        # Imágenes
         imgs = []
         variation_id = prod.get("variation_id")
         if variation_id:
-            # Si existe variation_id, pedimos /items/{item_id}/variations/{variation_id}
             v = fetch_api(f"/items/{prod['id']}/variations/{variation_id}")
             for pid in v.get("picture_ids", []):
-                #  ML convention: D_{picture_id}-O.jpg → imagen full, D_{picture_id}-I.jpg → thumbnail
                 imgs.append({
-                    "url":       f"https://http2.mlstatic.com/D_{pid}-O.jpg",
+                    "url": f"https://http2.mlstatic.com/D_{pid}-O.jpg",
                     "thumbnail": f"https://http2.mlstatic.com/D_{pid}-I.jpg"
                 })
         else:
-            # Si no hay variation_id, pedimos /items/{item_id}
             p = fetch_api(f"/items/{prod['id']}")
             for pic in p.get("pictures", []):
                 imgs.append({
-                    "url":       pic.get("url", DEFAULT_IMG_LOCAL),
+                    "url": pic.get("url", DEFAULT_IMG_LOCAL),
                     "thumbnail": pic.get("secure_url", DEFAULT_IMG_LOCAL)
                 })
 
@@ -104,18 +94,21 @@ def parse_order_data(order_data: dict) -> dict:
             imgs = [{"url": DEFAULT_IMG_LOCAL, "thumbnail": DEFAULT_IMG_LOCAL}]
 
         items.append({
-        "titulo":   titulo,
-        "sku":      sku,
-        "variante": variante,
-        "cantidad": cantidad,
-        "imagenes": imgs,
-        "item_id": prod.get("id"),
-        "variation_id": prod.get("variation_id"),
-        "logistic_type": order_data.get("shipping", {}).get("logistic_type")  # ✅ aquí
-})
+            "titulo": titulo,
+            "sku": sku,
+            "variante": variante,
+            "cantidad": cantidad,
+            "imagenes": imgs,
+            "item_id": prod.get("id"),
+            "variation_id": prod.get("variation_id"),
+            "logistic_type": logistic_type  # ✅ ya cargado una sola vez arriba
+        })
 
+    return {
+        "cliente": cliente,
+        "items": items
+    }
 
-    return {"cliente": cliente, "items": items}
 
 def get_valid_token():
     """
