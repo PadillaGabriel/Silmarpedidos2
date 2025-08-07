@@ -85,18 +85,19 @@
   let ultimoOrderId = "";
   let ultimoShipId = "";
 
-  function mostrarToastError(mensaje) {
-    const toast = document.getElementById("toast-alert");
-    const body = document.getElementById("toast-body");
-    body.innerText = mensaje;
+function mostrarToastError(mensaje) {
+  const toast = document.getElementById("toast-alert");
+  const body = document.getElementById("toast-body");
+  body.innerText = mensaje;
+  toast.classList.add("show");
+}
 
-    toast.classList.add("show");
-  }
+function ocultarToast() {
+  const toast = document.getElementById("toast-alert");
+  toast.classList.remove("show");
+}
 
-  function ocultarToast() {
-    const toast = document.getElementById("toast-alert");
-    toast.classList.remove("show");
-  }
+document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
 
 
 
@@ -239,33 +240,38 @@
       mostrarToastError("Error al obtener detalles del pedido.");
     }
   }
-  async function buscarManual() {
-    const id = document.getElementById("manual-id").value.trim();
-    if (!id) {
-      mostrarToastError("Por favor ingresá un ID de envío válido.");
+async function buscarManual() {
+  const id = document.getElementById("manual-id").value.trim();
+  if (!id) {
+    mostrarToastError("Por favor ingresá un ID de envío válido.");
+    return;
+  }
+
+  const form = new FormData();
+  form.append("shipment_id", id);
+
+  try {
+    const res = await fetch("/escanear", {
+      method: "POST",
+      body: form,
+      credentials: "include"
+    });
+    const data = await res.json();
+    if (!data.success) {
+      mostrarToastError(data.error || "No se pudo obtener el pedido.");
       return;
     }
 
-    const form = new FormData();
-    form.append("shipment_id", id);
+    // 👇 Asegurarse de setear el shipment ID
+    ultimoShipId = id;
+    document.getElementById("shipment_id_hidden").value = id;
 
-    try {
-      const res = await fetch("/escanear", {
-        method: "POST",
-        body: form,
-        credentials: "include"
-      });
-      const data = await res.json();
-      if (!data.success) {
-        mostrarToastError(data.error || "No se pudo obtener el pedido.");
-        return;
-      }
-
-      mostrarDetalle(data.detalle);  // ← esta función debe estar definida para renderizar los datos
-    } catch {
-      mostrarToastError("Error al conectar con el servidor.");
-    }
+    mostrarDetalle(data.detalle);
+  } catch {
+    mostrarToastError("Error al conectar con el servidor.");
   }
+}
+
 
 
 window.addEventListener("DOMContentLoaded", () => {
