@@ -48,7 +48,7 @@ def marcar_envio_armado(shipment_id, usuario):
     session.close()
     return filas > 0
 
-def marcar_envio_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
+def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
     ahora = datetime.now()
 
     pedidos = db.query(Pedido).filter(Pedido.shipment_id == shipment_id).all()
