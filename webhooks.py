@@ -73,16 +73,49 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 od = buscar_order_completo(order_id, headers)
 
+            # 🔁 Fallback 2: si todavía no tenemos order, intentamos obtener shipment por búsqueda
             if not od:
-                logger.error("❌[%s] order %s no accesible ni por fallback", rid, order_id)
+                try:
+                    from api_ml import fetch_api
+                    logger.info("🧭[%s] intentando /shipments/search?order_id=%s", rid, order_id)
+                    ships = fetch_api("/shipments/search", params={"order_id": order_id})
+                    results = (ships.get("results") or [])
+                    if results:
+                        shipment_id = str(results[0].get("id") or "")
+                except Exception as e:
+                    logger.warning("⚠️[%s] /shipments/search fallo: %s", rid, e)
+
+            if not od and not shipment_id:
+                # 🧷 Último recurso: guardar un STUB por order_id para no perder la señal.
+                try:
+                    rec = db.query(MLPedidoCache).filter_by(order_id=order_id).one_or_none()
+                    if not rec:
+                        rec = MLPedidoCache(
+                            order_id=order_id,
+                            fecha_consulta=datetime.now(timezone.utc),
+                            estado_ml="unknown",
+                            estado_envio=None,
+                            detalle=[]
+                        )
+                        db.add(rec)
+                        db.commit()
+                        logger.info("🧷[%s] STUB guardado en cache para order_id=%s", rid, order_id)
+                except Exception as e:
+                    logger.warning("⚠️[%s] no se pudo guardar STUB order_id=%s: %s", rid, order_id, e)
+
                 return {"ok": True, "skipped": True, "reason": "order_not_accessible"}
 
-            shipment_id = str(od.get("shipping", {}).get("id") or "")
+            # Si llegamos acá, tenemos od o al menos shipment_id
             if not shipment_id:
-                logger.warning("⚠️[%s] order_id=%s sin shipment_id → no se guarda", rid, order_id)
-                return {"ok": True, "mode": "order_no_shipment"}
+                shipment_id = str(od.get("shipping", {}).get("id") or "")
 
-            parsed_light = parse_order_data_light(od, shipment_id=shipment_id)
+            if not shipment_id:
+                logger.warning("⚠️[%s] order_id=%s sin shipment_id → upsert por order igual", rid, order_id)
+                parsed_light = parse_order_data_light(od or {}, shipment_id=None)
+                upsert_cache_basic(db, shipment_id="", order_id=order_id, parsed_light=parsed_light)
+                return {"ok": True, "mode": "order_light_no_shipment"}
+
+            parsed_light = parse_order_data_light(od or {}, shipment_id=shipment_id)
             logger.info(
                 "📝[%s] Upsert light (ORDER) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
                 rid, shipment_id, order_id,
@@ -102,6 +135,7 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
 
             background.add_task(enrich_bg, shipment_id)
             return {"ok": True, "mode": "order_light", "shipment_id": shipment_id}
+
 
         # --- SHIPMENT ---
         if shipment_id and not order_id:
