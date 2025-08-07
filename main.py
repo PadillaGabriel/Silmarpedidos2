@@ -9,7 +9,7 @@ import httpx
 
 from io import StringIO
 from urllib.parse import urlencode
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, time
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 
@@ -459,19 +459,21 @@ from datetime import datetime, timedelta, timezone
 
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):
-    ahora = datetime.now()
+    ahora = datetime.now(timezone.utc)
     hoy = ahora.date()
-    
-    # Definir ventana de despacho siguiente (de hoy 14hs a mañana 14hs)
-    desde = (datetime.combine(hoy, datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
-    hasta = (datetime.combine(hoy + timedelta(days=1), datetime.min.time()) + timedelta(hours=14)).astimezone(timezone.utc)
 
-    print("🧪 Ventana de conteo:", desde, "→", hasta)
+    # Inicio: ayer a las 14:00 hs (UTC)
+    inicio = datetime.combine(hoy - timedelta(days=1), time(14, 0)).astimezone(timezone.utc)
+
+    # Fin: hoy a las 14:00 hs (UTC)
+    fin = datetime.combine(hoy, time(14, 0)).astimezone(timezone.utc)
+
+    print("🧪 Ventana de conteo:", inicio.isoformat(), "→", fin.isoformat())
 
     # FLEX: self_service
     flex_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta.between(desde, hasta),
+        MLPedidoCache.fecha_consulta.between(inicio, fin),
         MLPedidoCache.logistic_type == 'self_service'
     )
 
@@ -484,14 +486,14 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
         .filter(
             Pedido.estado == 'armado',
-            Pedido.fecha_armado.between(desde, hasta),
+            Pedido.fecha_armado.between(inicio, fin),
             MLPedidoCache.logistic_type == 'self_service'
         ).count()
 
     # COLECTA: cross_docking
     colecta_query_base = db.query(MLPedidoCache).filter(
         MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta.between(desde, hasta),
+        MLPedidoCache.fecha_consulta.between(inicio, fin),
         MLPedidoCache.logistic_type == 'cross_docking'
     )
 
@@ -504,14 +506,14 @@ def resumen_dashboard(db: Session = Depends(get_db)):
         .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
         .filter(
             Pedido.estado == 'armado',
-            Pedido.fecha_armado.between(desde, hasta),
+            Pedido.fecha_armado.between(inicio, fin),
             MLPedidoCache.logistic_type == 'cross_docking'
         ).count()
 
     cancelados = db.query(MLPedidoCache.order_id)\
         .filter(
             MLPedidoCache.estado_ml == 'cancelled',
-            MLPedidoCache.fecha_consulta.between(desde, hasta)
+            MLPedidoCache.fecha_consulta.between(inicio, fin)
         ).all()
     cancelados_ids = [r[0] for r in cancelados]
 
