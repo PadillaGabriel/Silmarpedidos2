@@ -375,34 +375,48 @@ async def escanear_post(
         if not order_id and not shipment_id:
             return JSONResponse(status_code=400, content={"success": False, "error": "Falta order_id o shipment_id"})
 
-        # 1) Si tengo shipment_id, intento Cache FIRST
+# 1) Si tengo shipment_id, intento Cache FIRST (multi-orden)
         if shipment_id:
-            rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-            if rec:
-                # cache fresca y (opcionalmente) enriquecida
-                fresca = (
-                    rec.fecha_consulta
-                    and (datetime.now(timezone.utc) - rec.fecha_consulta) < timedelta(minutes=TTL_MIN)
-                )
-                # si tenés flags:
-                enriquecida = getattr(rec, "is_enriched", True)
+            recs = (
+                db.query(MLPedidoCache)
+                .filter_by(shipment_id=shipment_id)
+                .order_by(MLPedidoCache.fecha_consulta.desc())
+                .all()
+            )
+
+            if recs:
+                ahora = datetime.now(timezone.utc)
+                fresca = recs[0].fecha_consulta and (ahora - recs[0].fecha_consulta) < timedelta(minutes=TTL_MIN)
+
+                # ⚙️ Agregar/mergear info de todas las órdenes con ese mismo shipment
+                items = []
+                for r in recs:
+                    if r.detalle:
+                        items.extend(r.detalle)
+
+                # Si querés, podrías deduplicar por (order_id, item_id, variation_id) acá
+
+                order_ids = list(dict.fromkeys([r.order_id for r in recs if r.order_id]))
+                cliente = next((r.cliente for r in recs if r.cliente), "")  # primero no vacío
+                estado_envio = recs[0].estado_envio
+                estado_ml = recs[0].estado_ml
 
                 detalle_cache = {
-                    "cliente": rec.cliente,
-                    "items": rec.detalle or [],
-                    "estado_envio": rec.estado_envio,
-                    "estado_ml": rec.estado_ml,
-                    "primer_order_id": rec.order_id,
-                    "primer_shipment_id": rec.shipment_id,
+                    "cliente": cliente,
+                    "items": items or [],
+                    "estado_envio": estado_envio,
+                    "estado_ml": estado_ml,
+                    "primer_order_id": order_ids[0] if order_ids else None,
+                    "order_ids": order_ids,                   # 👈 lista completa
+                    "primer_shipment_id": shipment_id,
                 }
 
-                if fresca and enriquecida:
-                    # 🚀 devolver inmediato
+                if fresca:
                     return {"success": True, "detalle": detalle_cache}
 
-                # devolver parcial y enriquecer atrás
                 if background:
                     background.add_task(_enriquecer_bg, shipment_id)
+
                 return {"success": True, "detalle": detalle_cache, "incomplete": True}
 
         # 2) No hay cache útil → usa flujo consolidado (resolverá shipment si entra solo order)
