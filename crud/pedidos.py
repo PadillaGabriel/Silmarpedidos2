@@ -19,17 +19,20 @@ def add_order_if_not_exists(detalle):
     for item in detalle["items"]:
         exists = session.query(Pedido).filter_by(
             shipment_id=item["shipment_id"],
-            order_id=item["order_id"]
+            order_id=item["order_id"],
+            titulo=item["titulo"],  # Podés usar item_id o variation_id si querés más precisión
         ).first()
+
         if not exists:
             session.add(Pedido(
                 order_id=item["order_id"],
+                shipment_id=item["shipment_id"],
                 cliente=detalle["cliente"],
                 titulo=item["titulo"],
                 cantidad=item["cantidad"],
-                estado="pendiente",
-                shipment_id=item["shipment_id"]
+                estado="pendiente"
             ))
+
     session.commit()
     session.close()
 
@@ -45,35 +48,33 @@ def marcar_envio_armado(shipment_id, usuario):
     session.close()
     return filas > 0
 
-def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
+def marcar_envio_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
     ahora = datetime.now()
 
-    # Buscar el pedido en la tabla "pedidos"
-    pedido = db.query(Pedido).filter(
-        (Pedido.shipment_id == shipment_id) | (Pedido.order_id == shipment_id)
-    ).first()
+    pedidos = db.query(Pedido).filter(Pedido.shipment_id == shipment_id).all()
 
-    if not pedido:
-        print(f"❌ Pedido con shipment_id={shipment_id} o order_id={shipment_id} no encontrado en la tabla pedidos.")
+    if not pedidos:
+        print(f"❌ No se encontró ningún pedido con shipment_id={shipment_id}")
         return False
 
-    if pedido.estado != "armado":
-        print(f"⚠️ Pedido con shipment_id={shipment_id} está en estado: {pedido.estado}")
+    if any(p.estado != "armado" for p in pedidos):
+        print(f"⚠️ Hay ítems que aún no están armados para shipment_id={shipment_id}")
         return False
 
-    pedido_cache = db.query(MLPedidoCache).filter_by(order_id=pedido.order_id).first()
+    # Validar cancelación usando el primer pedido (todos comparten order_id y shipment_id)
+    pedido_cache = db.query(MLPedidoCache).filter_by(order_id=pedidos[0].order_id).first()
     if pedido_cache and pedido_cache.estado_ml == "cancelled":
         raise Exception("🚫 El pedido está cancelado y no se puede despachar.")
-    
-    # Actualizar estado
-    pedido.estado = "despachado"
-    pedido.fecha_despacho = ahora
-    pedido.logistica = logistica
-    pedido.tipo_envio = tipo_envio
-    pedido.usuario_despacho = usuario
+
+    for pedido in pedidos:
+        pedido.estado = "despachado"
+        pedido.fecha_despacho = ahora
+        pedido.logistica = logistica
+        pedido.tipo_envio = tipo_envio
+        pedido.usuario_despacho = usuario
 
     db.commit()
-    print(f"✅ Pedido {shipment_id} marcado como despachado por {usuario}")
+    print(f"✅ Shipment {shipment_id} marcado como despachado por {usuario}")
     return True
 
 def get_estado_envio(shipment_id):
