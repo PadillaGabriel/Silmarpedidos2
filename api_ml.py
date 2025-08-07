@@ -424,16 +424,19 @@ def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
         print(f"⚠️ Error al obtener logistic_type de shipment {shipment_id}: {e}")
     return None
 
-# api_ml.py (añadí esto)
 # api_ml.py
 def fetch_order_basic(order_id: str) -> dict | None:
+    # Solo aceptamos IDs numéricos
+    if not order_id or not str(order_id).isdigit():
+        return None
+
     token = get_valid_token()
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     url = f"{API_BASE}/orders/{order_id}"
     r = requests.get(url, headers=headers, timeout=6)
 
-    # Si el token no tiene acceso a esa orden, no rompas el flujo
-    if r.status_code in (401, 403):
+    # Si no hay permiso o no existe, devolvé None y dejá que el caller haga fallback
+    if r.status_code in (401, 403, 404):
         logger.warning("fetch_order_basic %s -> %s", order_id, r.status_code)
         return None
 
