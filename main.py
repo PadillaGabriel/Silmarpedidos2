@@ -77,21 +77,27 @@ router = APIRouter()
 TTL_MIN = 10
 
 def _enriquecer_bg(shipment_id: str):
-    """Enriquecimiento en segundo plano (no bloquea la request)."""
+    from database.connection import SessionLocal
+    from database.models import MLPedidoCache
     db = SessionLocal()
     try:
-        # Reusa tu flujo "bueno" por shipment_id (esto escribe cache completa)
         import asyncio
+        # Trae y guarda/enriquece desde la API
         asyncio.run(get_order_details(shipment_id=shipment_id, db=db))
-        # Si querés marcar flags (is_enriched/last_enriched_at), podés hacerlo acá.
-        rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-        if rec:
-            # Si tenés estos campos en tu modelo, marcá enriquecido:
+
+        # ⚠️ Puede haber varias filas con el mismo shipment_id (distintos order_id)
+        recs = (db.query(MLPedidoCache)
+                  .filter(MLPedidoCache.shipment_id == shipment_id)
+                  .order_by(MLPedidoCache.fecha_consulta.desc())
+                  .all())
+
+        for rec in recs:
             if hasattr(rec, "is_enriched"):
                 rec.is_enriched = True
             if hasattr(rec, "last_enriched_at"):
                 rec.last_enriched_at = datetime.now(timezone.utc)
-            db.commit()
+
+        db.commit()
     except Exception as e:
         print(f"⚠️ Enriquecimiento falló para {shipment_id}: {e}")
         db.rollback()
@@ -377,47 +383,47 @@ async def escanear_post(
 
 # 1) Si tengo shipment_id, intento Cache FIRST (multi-orden)
         if shipment_id:
-            recs = (
-                db.query(MLPedidoCache)
-                .filter_by(shipment_id=shipment_id)
-                .order_by(MLPedidoCache.fecha_consulta.desc())
-                .all()
-            )
+            recs = (db.query(MLPedidoCache)
+                    .filter(MLPedidoCache.shipment_id == shipment_id)
+                    .order_by(MLPedidoCache.fecha_consulta.desc(), MLPedidoCache.id.desc())
+                    .all())
 
             if recs:
-                ahora = datetime.now(timezone.utc)
-                fresca = recs[0].fecha_consulta and (ahora - recs[0].fecha_consulta) < timedelta(minutes=TTL_MIN)
-
-                # ⚙️ Agregar/mergear info de todas las órdenes con ese mismo shipment
+                # merge de info
                 items = []
+                order_ids = []
+                cliente = ""
+                estado_envio = ""
+                estado_ml = ""
+
                 for r in recs:
+                    if r.order_id: order_ids.append(r.order_id)
+                    if not cliente and r.cliente: cliente = r.cliente
+                    if not estado_envio and r.estado_envio: estado_envio = r.estado_envio
+                    if not estado_ml and r.estado_ml: estado_ml = r.estado_ml
                     if r.detalle:
-                        items.extend(r.detalle)
+                        try:
+                            items.extend(r.detalle)   # si ya guardás JSON en 'detalle'
+                        except Exception:
+                            pass
 
-                # Si querés, podrías deduplicar por (order_id, item_id, variation_id) acá
+                order_ids = list(dict.fromkeys(order_ids))  # únicos, preservando orden
 
-                order_ids = list(dict.fromkeys([r.order_id for r in recs if r.order_id]))
-                cliente = next((r.cliente for r in recs if r.cliente), "")  # primero no vacío
-                estado_envio = recs[0].estado_envio
-                estado_ml = recs[0].estado_ml
-
-                detalle_cache = {
+                detalle = {
+                    "primer_shipment_id": shipment_id,
+                    "order_ids": order_ids,           # 👈 todos los orders de ese envío
                     "cliente": cliente,
-                    "items": items or [],
                     "estado_envio": estado_envio,
                     "estado_ml": estado_ml,
-                    "primer_order_id": order_ids[0] if order_ids else None,
-                    "order_ids": order_ids,                   # 👈 lista completa
-                    "primer_shipment_id": shipment_id,
+                    "items": items or []
                 }
 
-                if fresca:
-                    return {"success": True, "detalle": detalle_cache}
-
+                # opcional: disparar enriquecimiento en bg
                 if background:
                     background.add_task(_enriquecer_bg, shipment_id)
 
-                return {"success": True, "detalle": detalle_cache, "incomplete": True}
+                return {"success": True, "detalle": detalle}
+
 
         # 2) No hay cache útil → usa flujo consolidado (resolverá shipment si entra solo order)
         detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
