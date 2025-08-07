@@ -40,9 +40,22 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
     resource = data.get("resource") or ""
     logger.info("📬 ML webhook: topic=%s resource=%s", topic, resource)
 
-    # ... (tu parseo de order_id/shipment_id) ...
-    logger.info("🆔 IDs parseados -> order_id=%s shipment_id=%s", order_id, shipment_id)
+    # 1) Inicializar SIEMPRE
+    order_id: str | None = None
+    shipment_id: str | None = None
 
+    # 2) Parsear solo IDs numéricos (evita /orders/feedback, etc.)
+    m = re.match(r"^/orders/(\d+)(?:/.*)?$", resource)
+    if m:
+        order_id = m.group(1)
+
+    m = re.match(r"^/shipments/(\d+)", resource)
+    if m:
+        shipment_id = m.group(1)
+
+    # 3) Log seguro
+    logger.info("🆔 IDs parseados -> order_id=%s shipment_id=%s", order_id, shipment_id)
+    
     db = SessionLocal()
     try:
         # --- ORDER ---
