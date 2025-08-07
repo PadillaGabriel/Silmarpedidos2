@@ -25,6 +25,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from passlib.hash import bcrypt
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct
+
 
 # Inicialización DB
 from database.connection import SessionLocal
@@ -455,7 +457,6 @@ async def despachar_post(
         "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"
     }
 
-from datetime import datetime, timedelta, timezone
 
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):
@@ -470,47 +471,50 @@ def resumen_dashboard(db: Session = Depends(get_db)):
 
     print("🧪 Ventana de conteo:", inicio.isoformat(), "→", fin.isoformat())
 
-    # FLEX: self_service
-    flex_query_base = db.query(MLPedidoCache).filter(
+    # === FLEX: self_service ===
+    flex_base = db.query(MLPedidoCache.shipment_id).filter(
         MLPedidoCache.estado_ml != 'cancelled',
         MLPedidoCache.fecha_consulta.between(inicio, fin),
         MLPedidoCache.logistic_type == 'self_service'
-    )
+    ).distinct()
 
-    flex_total = flex_query_base\
-        .outerjoin(Pedido, MLPedidoCache.order_id == Pedido.order_id)\
+    # Total de shipments únicos que no están armados
+    flex_total = flex_base\
+        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)\
         .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
         .count()
 
-    flex_armados = db.query(Pedido)\
-        .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
+    # Shipments armados
+    flex_armados = db.query(func.count(distinct(Pedido.shipment_id)))\
+        .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)\
         .filter(
             Pedido.estado == 'armado',
             Pedido.fecha_armado.between(inicio, fin),
             MLPedidoCache.logistic_type == 'self_service'
-        ).count()
+        ).scalar()
 
-    # COLECTA: cross_docking
-    colecta_query_base = db.query(MLPedidoCache).filter(
+    # === COLECTA: cross_docking ===
+    colecta_base = db.query(MLPedidoCache.shipment_id).filter(
         MLPedidoCache.estado_ml != 'cancelled',
         MLPedidoCache.fecha_consulta.between(inicio, fin),
         MLPedidoCache.logistic_type == 'cross_docking'
-    )
+    ).distinct()
 
-    colecta_total = colecta_query_base\
-        .outerjoin(Pedido, MLPedidoCache.order_id == Pedido.order_id)\
+    colecta_total = colecta_base\
+        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)\
         .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
         .count()
 
-    colecta_armados = db.query(Pedido)\
-        .join(MLPedidoCache, MLPedidoCache.order_id == Pedido.order_id)\
+    colecta_armados = db.query(func.count(distinct(Pedido.shipment_id)))\
+        .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)\
         .filter(
             Pedido.estado == 'armado',
             Pedido.fecha_armado.between(inicio, fin),
             MLPedidoCache.logistic_type == 'cross_docking'
-        ).count()
+        ).scalar()
 
-    cancelados = db.query(MLPedidoCache.order_id)\
+    # Cancelados (por shipment)
+    cancelados = db.query(distinct(MLPedidoCache.shipment_id))\
         .filter(
             MLPedidoCache.estado_ml == 'cancelled',
             MLPedidoCache.fecha_consulta.between(inicio, fin)
