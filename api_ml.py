@@ -162,33 +162,33 @@ def fetch_api(path, params=None, extra_headers=None):
     r.raise_for_status()
     return r.json()
 
+# api_ml.py
 def buscar_order_completo(order_id, headers):
-    """
-    Trae la orden por /orders/{id}. Si no se puede (403/401),
-    usa /orders/search con el seller_id del token actual.
-    """
-    # 1) Intento directo
+    """Primero /orders/{id}. Si falla (401/403/404), fallback a /orders/search?order_id=..."""
     try:
         return fetch_api(f"/orders/{order_id}", extra_headers=headers)
-    except requests.HTTPError as e:
-        code = getattr(e.response, "status_code", None)
-        logger.warning("⚠️ /orders/%s devolvió %s. Fallback a /orders/search", order_id, code)
     except Exception as e:
-        logger.warning("⚠️ /orders/%s error: %s. Fallback a /orders/search", order_id, e)
+        logger.warning("⚠️ /orders/%s no accesible → fallback /orders/search", order_id)
 
-    # 2) Fallback con seller dinámico
-    seller_id = get_token_user_id()
-    if not seller_id:
-        logger.error("❌ Sin seller_id (user_id) para /orders/search. No se puede fallback.")
-        return None
+        # Tomar seller_id del token (el dueño real de la app)
+        seller_id = None
+        try:
+            with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+                seller_id = (json.load(f) or {}).get("user_id")
+        except Exception:
+            pass
 
-    try:
-        result = fetch_api(f"/orders/search?seller={seller_id}&q={order_id}", extra_headers=headers)
-        return result["results"][0] if result.get("results") else None
-    except Exception as e:
-        logger.warning("⚠️ /orders/search no devolvió resultados para %s (seller=%s): %s",
-                       order_id, seller_id, e)
-        return None
+        qs = f"order_id={order_id}"
+        if seller_id:
+            qs = f"seller={seller_id}&{qs}"
+
+        try:
+            result = fetch_api(f"/orders/search?{qs}", extra_headers=headers)
+            items = result.get("results") or []
+            return items[0] if items else None
+        except Exception as e2:
+            logger.error("❌ fallback /orders/search falló para %s: %s", order_id, e2)
+            return None
 
 
 
@@ -522,18 +522,18 @@ def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_l
 
     rec.detalle = parsed_light.get("items", [])
     rec.fecha_consulta = datetime.now(timezone.utc)
+    if hasattr(rec, "is_enriched"):
+        rec.is_enriched = False
 
     db.commit()
-    logger.info(
-        "💾 UPSERT cache sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
-        shipment_id, rec.order_id, rec.cliente, rec.estado_envio, rec.estado_ml, len(rec.detalle or [])
-    )
 
-def get_token_user_id() -> str:
-    try:
-        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return str(data.get("user_id") or "")
-    except Exception as e:
-        logger.warning("No se pudo leer user_id desde %s: %s", TOKEN_FILE, e)
-        return ""
+    # 👇 LOG CLAVE
+    logger.info(
+        "💾 upsert_cache_basic OK → shipment=%s order=%s cliente=%s estado_envio=%s estado_ml=%s items=%s",
+        shipment_id,
+        order_id,
+        parsed_light.get("cliente"),
+        parsed_light.get("estado_envio"),
+        parsed_light.get("estado_ml"),
+        len(parsed_light.get("items") or []),
+    )
