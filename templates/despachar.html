@@ -8,7 +8,7 @@
     <div class="card-body">
       <h2>Despachar Pedido</h2>
       <div id="reader-container" style="display:flex; justify-content:center; margin-top:1rem;">
-        <div id="reader" style="width:320; height:240;"></div>
+        <div id="reader" style="width:320px; height:240px;"></div>
       </div>
       <div style="text-align:center; margin-top:0.5rem;">
         <button id="stop-btn" class="btn">Detener escaneo</button>
@@ -80,85 +80,75 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-  let scanner;
-  let escaneoActivo = true;
-  let ultimoOrderId = "";
-  let ultimoShipId = "";
 
+let scanner;
+let escaneoActivo = true;
+let ultimoOrderId = "";
+let ultimoShipId = "";
+
+/* ===== Toasts ===== */
 function mostrarToast(tipo, mensaje) {
   const toast = document.getElementById("toast-alert");
-  const body = document.getElementById("toast-body");
+  const body  = document.getElementById("toast-body");
   toast.classList.remove("success","error");
   toast.classList.add(tipo === "success" ? "success" : "error");
   body.innerText = mensaje;
   toast.classList.add("show");
 }
-
 const mostrarToastSuccess = (msg) => mostrarToast("success", msg);
 const mostrarToastError   = (msg) => mostrarToast("error", msg);
-
 function ocultarToast() {
   const toast = document.getElementById("toast-alert");
   toast.classList.remove("show");
 }
 
-
-
-
-  async function iniciarEscaneo() {
-
-    if (!scanner) {
-      scanner = new Html5Qrcode("reader");
-    }
-
-    escaneoActivo = true;  // 👈 Lo movemos arriba para evitar clicks rápidos que fallan
-    try {
-      await scanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
-        async (decodedText) => {
-          console.log("✅ QR leído:", decodedText);
-          await detenerEscaneo();
-          await escanear(decodedText);
-        },
-        (errorMessage) => {
-          // Lecturas fallidas silenciosas
-        }
-      );
-      document.getElementById("stop-btn").innerText = "Detener escaneo";
-      console.log("🎥 Escaneo iniciado");
-    } catch (err) {
-      console.error("❌ Error iniciando escaneo:", err);
-      escaneoActivo = false;  // 🔁 revertir si falló
-    }
+/* ===== QR ===== */
+async function iniciarEscaneo() {
+  if (!scanner) scanner = new Html5Qrcode("reader");
+  escaneoActivo = true;
+  try {
+    await scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      async (decodedText) => {
+        console.log("✅ QR leído:", decodedText);
+        await detenerEscaneo();
+        await escanear(decodedText);
+      },
+      (_) => { /* fallas silenciosas */ }
+    );
+    document.getElementById("stop-btn").innerText = "Detener escaneo";
+    console.log("🎥 Escaneo iniciado");
+  } catch (err) {
+    console.error("❌ Error iniciando escaneo:", err);
+    escaneoActivo = false;
   }
+}
 
 async function detenerEscaneo() {
-      if (!scanner) return;
-      try { await scanner.stop(); } catch (_) {}
-      escaneoActivo = false;
-      document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
-    }
+  if (!scanner) return;
+  try { await scanner.stop(); } catch (_) {}
+  escaneoActivo = false;
+  document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
+}
 
+/* ===== Render detalle ===== */
+function mostrarDetalle(detalle) {
+  document.getElementById("cliente").innerText = detalle.cliente;
+  document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
 
+  const tabla = document.getElementById("tabla-items-despachar");
+  const cards = document.getElementById("cards-items-despachar");
+  tabla.innerHTML = "";
+  cards.innerHTML = "";
 
-  function mostrarDetalle(detalle) {
-    document.getElementById("cliente").innerText = detalle.cliente;
-    document.getElementById("estado_envio").innerText = detalle.estado_envio || "Desconocido";
+  detalle.items.forEach(item => {
+    const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
+      ? item.imagenes[0].thumbnail
+      : "https://via.placeholder.com/150";
 
-    const tabla = document.getElementById("tabla-items-despachar");
-    const cards = document.getElementById("cards-items-despachar");
-    tabla.innerHTML = "";
-    cards.innerHTML = "";
-
-    detalle.items.forEach(item => {
-      const imgUrl = Array.isArray(item.imagenes) && item.imagenes.length
-        ? item.imagenes[0].thumbnail
-        : "https://via.placeholder.com/150";
-
-      // 🖥 Tabla (desktop)
-      const row = document.createElement("tr");
-      row.innerHTML = `
+    const row = document.createElement("tr");
+    row.innerHTML = `
       <td style="text-align:center; padding:0.5rem; border-bottom:1px solid #eee;">
         <img src="${imgUrl}" width="80" style="border-radius:4px;">
       </td>
@@ -171,12 +161,11 @@ async function detenerEscaneo() {
       <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.variante}</td>
       <td style="padding:0.5rem; border-bottom:1px solid #eee;">${item.cantidad}</td>
     `;
-      tabla.appendChild(row);
+    tabla.appendChild(row);
 
-      // 📱 Tarjeta (mobile)
-      const card = document.createElement("div");
-      card.className = "detalle-card";
-      card.innerHTML = `
+    const card = document.createElement("div");
+    card.className = "detalle-card";
+    card.innerHTML = `
       <div class="detalle-titulo">${item.titulo}</div>
       <img src="${imgUrl}" alt="Imagen del producto">
       <div class="detalle-info">
@@ -186,54 +175,48 @@ async function detenerEscaneo() {
         ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="margin-top:0.5rem; display:inline-block; color:#007bff;">Ver publicación</a>` : ""}
       </div>
     `;
-      cards.appendChild(card);
-    });
+    cards.appendChild(card);
+  });
 
-    // Actualizar IDs ocultos
-    ultimoOrderId = detalle.primer_order_id || "";
-    document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
-    document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
+  ultimoOrderId = detalle.primer_order_id || "";
+  document.getElementById("order_id_hidden").value = detalle.primer_order_id || "";
+  document.getElementById("shipment_id_hidden").value = ultimoShipId || "";
+  document.getElementById("detalle-pedido").style.display = "block";
+}
 
-    // Mostrar sección
-    document.getElementById("detalle-pedido").style.display = "block";
+/* ===== Llamados ===== */
+async function escanear(raw) {
+  console.log("🔍 Llamado a escanear() con:", raw);
+  let shipmentVal;
+  try {
+    const obj = JSON.parse(raw);
+    shipmentVal = obj.id;
+  } catch {
+    shipmentVal = raw;
   }
+  console.log("📦 shipment_id:", shipmentVal);
 
+  ultimoShipId = shipmentVal;
+  document.getElementById("shipment_id_hidden").value = shipmentVal;
 
-  async function escanear(raw) {
-    console.log("🔍 Llamado a escanear() con:", raw); // ✅
-    let shipmentVal;
-    try {
-      const obj = JSON.parse(raw);
-      shipmentVal = obj.id;
-    } catch {
-      shipmentVal = raw;
+  const form = new FormData();
+  form.append("shipment_id", shipmentVal);
+
+  try {
+    const res = await fetch("/escanear", { method: "POST", body: form });
+    const data = await res.json();
+    console.log("📥 Respuesta de /escanear:", data);
+    if (data.success) {
+      mostrarDetalle(data.detalle);
+    } else {
+      mostrarToastError(data.error || "No se pudo obtener el pedido.");
     }
-    console.log("📦 shipment_id:", shipmentVal);
-
-    ultimoShipId = shipmentVal;
-    document.getElementById("shipment_id_hidden").value = shipmentVal;
-
-    const form = new FormData();
-    form.append("shipment_id", shipmentVal);
-
-    try {
-      const res = await fetch("/escanear", {
-        method: "POST",
-        body: form
-      });
-      const data = await res.json();
-      console.log("📥 Respuesta de /escanear:", data); // ✅
-
-      if (data.success) {
-        mostrarDetalle(data.detalle);
-      } else {
-        mostrarToastError(data.error || "No se pudo obtener el pedido.");
-      }
-    } catch (e) {
-      console.error("❌ Error al llamar /escanear:", e);
-      mostrarToastError("Error al obtener detalles del pedido.");
-    }
+  } catch (e) {
+    console.error("❌ Error al llamar /escanear:", e);
+    mostrarToastError("Error al obtener detalles del pedido.");
   }
+}
+
 async function buscarManual() {
   const id = document.getElementById("manual-id").value.trim();
   if (!id) {
@@ -255,29 +238,24 @@ async function buscarManual() {
       mostrarToastError(data.error || "No se pudo obtener el pedido.");
       return;
     }
-
-    // 👇 Asegurarse de setear el shipment ID
     ultimoShipId = id;
     document.getElementById("shipment_id_hidden").value = id;
-
     mostrarDetalle(data.detalle);
   } catch {
     mostrarToastError("Error al conectar con el servidor.");
   }
 }
 
-
-
+/* ===== Init ===== */
 window.addEventListener("DOMContentLoaded", () => {
   iniciarEscaneo();
 
-  // Cerrar toast si existe el botón
-  document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
+  // Cerrar toast (null-safe)
+  document.getElementById("toast-close-btn")?.addEventListener("click", ocultarToast);
 
-
+  // Botón detener / reiniciar
   document.getElementById("stop-btn").addEventListener("click", async () => {
     const btn = document.getElementById("stop-btn");
-
     if (scanner && escaneoActivo) {
       try {
         await scanner.stop();
@@ -294,44 +272,46 @@ window.addEventListener("DOMContentLoaded", () => {
       document.getElementById("estado_envio").innerText = "";
       document.getElementById("order_id_hidden").value = "";
       document.getElementById("shipment_id_hidden").value = "";
-      ultimoShipId = "";          // 👈 agregar
-      ultimoOrderId = ""; 
+      ultimoShipId  = "";
+      ultimoOrderId = "";
       iniciarEscaneo();
     }
   });
 
-  // Escaneo desde imagen: parar el scanner actual, leer, y reanudar
+  // Escaneo desde imagen: parar, leer archivo, reanudar
   document.getElementById("input-escanear").addEventListener("change", async e => {
     if (!e.target.files.length) return;
     try {
-      await detenerEscaneo(); // evita colisión con el scanner en vivo
-
+      await detenerEscaneo();
       const qrImg = new Html5Qrcode("reader");
       const decoded = await qrImg.scanFile(e.target.files[0], true);
       await qrImg.clear();
-
       await escanear(decoded);
     } catch (err) {
       console.error(err);
       mostrarToastError("No se pudo leer el QR.");
     } finally {
-      iniciarEscaneo(); // vuelve a prender la cámara
+      iniciarEscaneo();
     }
   });
 
   document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
 
+  // Submit despachar (anti doble click + JSON robusto)
   document.getElementById("despachar-form").addEventListener("submit", async e => {
     e.preventDefault();
 
     // Refuerzo: asegurar valores
     document.getElementById("shipment_id_hidden").value = ultimoShipId;
-    document.getElementById("order_id_hidden").value = ultimoOrderId;
+    document.getElementById("order_id_hidden").value   = ultimoOrderId;
 
     if (!ultimoShipId) {
       mostrarToastError("No se detectó un shipment_id válido. Escaneá nuevamente.");
       return;
     }
+
+    const submitBtn = e.target.querySelector('[type="submit"]');
+    submitBtn.disabled = true;
 
     const formData = new FormData(e.target);
 
@@ -357,9 +337,10 @@ window.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.error("❌ Error al conectar:", err);
       mostrarToastError("Error al conectar con el servidor.");
+    } finally {
+      submitBtn.disabled = false;
     }
   });
 });
 </script>
-
 {% endblock %}
