@@ -13,7 +13,8 @@ from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
 from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
-
+import logging
+logger = logging.getLogger("uvicorn.error")
 
 
 # Configuración
@@ -496,10 +497,9 @@ def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_l
         rec = MLPedidoCache(shipment_id=shipment_id)
         db.add(rec)
 
-    # solo seteamos si hay valor (no pisar con None)
-    def set_if(v, cur_attr):
+    def set_if(v, attr):
         if v is not None:
-            setattr(rec, cur_attr, v)
+            setattr(rec, attr, v)
 
     set_if(order_id, "order_id")
     set_if(parsed_light.get("cliente"), "cliente")
@@ -507,12 +507,11 @@ def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_l
     set_if(parsed_light.get("estado_ml"), "estado_ml")
     set_if(parsed_light.get("logistic_type"), "logistic_type")
 
-    # guardamos items “light” (sin imágenes) para que el front ya muestre algo
     rec.detalle = parsed_light.get("items", [])
     rec.fecha_consulta = datetime.now(timezone.utc)
 
-    # flags opcionales
-    if hasattr(rec, "is_enriched"):
-        rec.is_enriched = False
-
     db.commit()
+    logger.info(
+        "💾 UPSERT cache sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
+        shipment_id, rec.order_id, rec.cliente, rec.estado_envio, rec.estado_ml, len(rec.detalle or [])
+    )
