@@ -32,19 +32,24 @@ def enrich_bg(shipment_id: str):
     finally:
         db.close()
 
+def _rid():
+    # id corto para correlacionar logs de una misma request
+    return datetime.utcnow().strftime("%H%M%S.%f")[-6:]
+
 
 @webhooks.post("/ml")
 async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
+    rid = _rid()
     data = await request.json()
     topic = data.get("topic") or ""
     resource = data.get("resource") or ""
-    logger.info("📬 ML webhook: topic=%s resource=%s", topic, resource)
+    logger.info("📬[%s] ML webhook: topic=%s resource=%s", rid, topic, resource)
 
-    # 1) Inicializar SIEMPRE
+    # Inicializar siempre
     order_id: str | None = None
     shipment_id: str | None = None
 
-    # 2) Parsear solo IDs numéricos (evita /orders/feedback, etc.)
+    # Parsear SOLO números: evita /orders/feedback
     m = re.match(r"^/orders/(\d+)(?:/.*)?$", resource)
     if m:
         order_id = m.group(1)
@@ -53,68 +58,72 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
     if m:
         shipment_id = m.group(1)
 
-    # 3) Log seguro
-    logger.info("🆔 IDs parseados -> order_id=%s shipment_id=%s", order_id, shipment_id)
-    
+    logger.info("🆔[%s] IDs parseados -> order_id=%s shipment_id=%s", rid, order_id, shipment_id)
+
     db = SessionLocal()
     try:
         # --- ORDER ---
         if order_id and not shipment_id:
+            logger.info("🔎[%s] fetch_order_basic(%s)", rid, order_id)
             od = fetch_order_basic(order_id)
+
             if od is None:
-                logger.warning("⚠️ /orders/%s no accesible, usando fallback /orders/search", order_id)
+                logger.warning("⚠️[%s] /orders/%s no accesible → fallback /orders/search", rid, order_id)
                 token = get_valid_token()
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 od = buscar_order_completo(order_id, headers)
 
-            if od:
-                shipment_id = str(od.get("shipping", {}).get("id") or "")
-                if not shipment_id:
-                    logger.warning("⚠️ order_id=%s sin shipment_id; se omite upsert", order_id)
-                    return {"ok": True, "mode": "order_no_shipment"}
+            if not od:
+                logger.error("❌[%s] order %s no accesible ni por fallback", rid, order_id)
+                return {"ok": True, "skipped": True, "reason": "order_not_accessible"}
 
-                parsed_light = parse_order_data_light(od, shipment_id=shipment_id)
-                logger.info(
-                    "📝 Upsert light (ORDER) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
-                    shipment_id, order_id,
-                    parsed_light.get("cliente"),
-                    parsed_light.get("estado_envio"),
-                    parsed_light.get("estado_ml"),
-                    len(parsed_light.get("items") or []),
-                )
-                upsert_cache_basic(db, shipment_id=shipment_id, order_id=order_id, parsed_light=parsed_light)
+            shipment_id = str(od.get("shipping", {}).get("id") or "")
+            if not shipment_id:
+                logger.warning("⚠️[%s] order_id=%s sin shipment_id → no se guarda", rid, order_id)
+                return {"ok": True, "mode": "order_no_shipment"}
 
-                # verificación inmediata post-commit
-                rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-                if rec:
-                    logger.info(
-                        "✅ Cache guardada sid=%s oid=%s cliente=%s estado_envio=%s items=%d",
-                        rec.shipment_id, rec.order_id, rec.cliente, rec.estado_envio, len(rec.detalle or [])
-                    )
-                else:
-                    logger.error("❌ No se encontró el registro recién guardado (sid=%s)", shipment_id)
+            parsed_light = parse_order_data_light(od, shipment_id=shipment_id)
+            logger.info(
+                "📝[%s] Upsert light (ORDER) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
+                rid, shipment_id, order_id,
+                parsed_light.get("cliente"),
+                parsed_light.get("estado_envio"),
+                parsed_light.get("estado_ml"),
+                len(parsed_light.get("items") or []),
+            )
+            upsert_cache_basic(db, shipment_id=shipment_id, order_id=order_id, parsed_light=parsed_light)
 
-                background.add_task(enrich_bg, shipment_id)
-                return {"ok": True, "mode": "order_light", "shipment_id": shipment_id}
+            # Verificación inmediata post-commit
+            rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
+            logger.info(
+                "✅[%s] Cache guardada sid=%s encontrado=%s items=%d",
+                rid, shipment_id, bool(rec), len((rec and rec.detalle) or [])
+            )
+
+            background.add_task(enrich_bg, shipment_id)
+            return {"ok": True, "mode": "order_light", "shipment_id": shipment_id}
 
         # --- SHIPMENT ---
         if shipment_id and not order_id:
             try:
                 from api_ml import fetch_api
+                logger.info("🔎[%s] fetch_api(/shipments/%s)", rid, shipment_id)
                 ship = fetch_api(f"/shipments/{shipment_id}")
                 order_id = str(ship.get("order_id") or (ship.get("order") or {}).get("id") or "")
+                ship_status = ship.get("status")
             except Exception as e:
-                logger.warning("⚠️ /shipments/%s fallo: %s", shipment_id, e)
+                logger.warning("⚠️[%s] /shipments/%s fallo: %s", rid, shipment_id, e)
                 order_id = ""
+                ship_status = None
 
             od = fetch_order_basic(order_id) if order_id else None
             parsed_light = (
                 parse_order_data_light(od, shipment_id=shipment_id)
-                if od else {"cliente": None, "estado_envio": ship.get("status") if 'ship' in locals() else None, "estado_ml": None, "items": []}
+                if od else {"cliente": None, "estado_envio": ship_status, "estado_ml": None, "items": []}
             )
             logger.info(
-                "📝 Upsert light (SHIPMENT) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
-                shipment_id, order_id or "",
+                "📝[%s] Upsert light (SHIPMENT) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
+                rid, shipment_id, order_id or "",
                 parsed_light.get("cliente"),
                 parsed_light.get("estado_envio"),
                 parsed_light.get("estado_ml"),
@@ -123,18 +132,15 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
             upsert_cache_basic(db, shipment_id=shipment_id, order_id=order_id or "", parsed_light=parsed_light)
 
             rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-            if rec:
-                logger.info(
-                    "✅ Cache guardada sid=%s oid=%s cliente=%s estado_envio=%s items=%d",
-                    rec.shipment_id, rec.order_id, rec.cliente, rec.estado_envio, len(rec.detalle or [])
-                )
-            else:
-                logger.error("❌ No se encontró el registro recién guardado (sid=%s)", shipment_id)
+            logger.info(
+                "✅[%s] Cache guardada sid=%s encontrado=%s items=%d",
+                rid, shipment_id, bool(rec), len((rec and rec.detalle) or [])
+            )
 
             background.add_task(enrich_bg, shipment_id)
             return {"ok": True, "mode": "shipment_light", "shipment_id": shipment_id}
 
-        logger.info("↪️ Notificación omitida (resource=%s)", resource)
+        logger.info("↪️[%s] Notificación omitida (resource=%s)", rid, resource)
         return {"ok": True, "skipped": True}
 
     finally:
