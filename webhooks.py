@@ -2,27 +2,30 @@
 import asyncio
 import logging
 import re
-from fastapi import APIRouter, Request, BackgroundTasks, Depends
+from fastapi import APIRouter, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from database.connection import SessionLocal
 from database.models import MLPedidoCache
 from datetime import datetime, timezone
-# webhooks.py
+
 from api_ml import (
     fetch_order_basic,
     parse_order_data_light,
     get_valid_token,
     get_order_details,
     upsert_cache_basic,
-    buscar_order_completo,          # 👈 importar esto para el fallback
+    buscar_order_completo,
+    # 👇 lo usamos directo en SHIPMENT y fallback de ORDER
+    fetch_api,
 )
+
 logger = logging.getLogger("uvicorn.error")
 webhooks = APIRouter()
+
 
 def enrich_bg(shipment_id: str):
     db = SessionLocal()
     try:
-        import asyncio
         asyncio.run(get_order_details(shipment_id=shipment_id, db=db))  # esto ya escribe todo con imágenes
         rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
         if rec and hasattr(rec, "is_enriched"):
@@ -31,6 +34,7 @@ def enrich_bg(shipment_id: str):
             db.commit()
     finally:
         db.close()
+
 
 def _rid():
     # id corto para correlacionar logs de una misma request
@@ -60,33 +64,39 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
 
     logger.info("🆔[%s] IDs parseados -> order_id=%s shipment_id=%s", rid, order_id, shipment_id)
 
-    db = SessionLocal()
+    db: Session = SessionLocal()
     try:
-        # --- ORDER ---
+        # =======================
+        # --- PATH: ORDER ---
+        # =======================
         if order_id and not shipment_id:
             logger.info("🔎[%s] fetch_order_basic(%s)", rid, order_id)
             od = fetch_order_basic(order_id)
 
+            # Fallback 1: /orders/search con seller del token
             if od is None:
                 logger.warning("⚠️[%s] /orders/%s no accesible → fallback /orders/search", rid, order_id)
                 token = get_valid_token()
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 od = buscar_order_completo(order_id, headers)
 
-            # 🔁 Fallback 2: si todavía no tenemos order, intentamos obtener shipment por búsqueda
+            # Fallback 2: si sigue sin order, intentar encontrar shipment por búsqueda
             if not od:
                 try:
-                    from api_ml import fetch_api
                     logger.info("🧭[%s] intentando /shipments/search?order_id=%s", rid, order_id)
-                    ships = fetch_api("/shipments/search", params={"order_id": order_id})
+                    token = get_valid_token()
+                    headers = {"Authorization": f"Bearer {token}"} if token else {}
+                    ships = fetch_api("/shipments/search",
+                                      params={"order_id": order_id},
+                                      extra_headers=headers)   # 👈 reutiliza el MISMO token
                     results = (ships.get("results") or [])
                     if results:
                         shipment_id = str(results[0].get("id") or "")
                 except Exception as e:
                     logger.warning("⚠️[%s] /shipments/search fallo: %s", rid, e)
 
+            # Último recurso: STUB si no hay od ni shipment
             if not od and not shipment_id:
-                # 🧷 Último recurso: guardar un STUB por order_id para no perder la señal.
                 try:
                     rec = db.query(MLPedidoCache).filter_by(order_id=order_id).one_or_none()
                     if not rec:
@@ -102,10 +112,9 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
                         logger.info("🧷[%s] STUB guardado en cache para order_id=%s", rid, order_id)
                 except Exception as e:
                     logger.warning("⚠️[%s] no se pudo guardar STUB order_id=%s: %s", rid, order_id, e)
-
                 return {"ok": True, "skipped": True, "reason": "order_not_accessible"}
 
-            # Si llegamos acá, tenemos od o al menos shipment_id
+            # Si llegamos acá, tenemos 'od' o al menos 'shipment_id'
             if not shipment_id:
                 shipment_id = str(od.get("shipping", {}).get("id") or "")
 
@@ -136,11 +145,11 @@ async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
             background.add_task(enrich_bg, shipment_id)
             return {"ok": True, "mode": "order_light", "shipment_id": shipment_id}
 
-
-        # --- SHIPMENT ---
+        # =========================
+        # --- PATH: SHIPMENT ---
+        # =========================
         if shipment_id and not order_id:
             try:
-                from api_ml import fetch_api
                 logger.info("🔎[%s] fetch_api(/shipments/%s)", rid, shipment_id)
                 ship = fetch_api(f"/shipments/{shipment_id}")
                 order_id = str(ship.get("order_id") or (ship.get("order") or {}).get("id") or "")
