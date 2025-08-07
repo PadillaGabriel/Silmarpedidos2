@@ -61,11 +61,19 @@ def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, us
         print(f"⚠️ Hay ítems que aún no están armados para shipment_id={shipment_id}")
         return False
 
-    # Validar cancelación usando el primer pedido (todos comparten order_id y shipment_id)
-    pedido_cache = db.query(MLPedidoCache).filter_by(order_id=pedidos[0].order_id).first()
-    if pedido_cache and pedido_cache.estado_ml == "cancelled":
-        raise Exception("🚫 El pedido está cancelado y no se puede despachar.")
+    # 🔁 Obtener todos los order_id asociados a ese shipment
+    order_ids = {p.order_id for p in pedidos}
 
+    # 🚫 Verificar si alguno está cancelado en cache
+    pedido_cancelado = db.query(MLPedidoCache).filter(
+        MLPedidoCache.shipment_id == shipment_id,
+        MLPedidoCache.estado_ml == "cancelled"
+    ).first()
+
+    if pedido_cancelado:
+        raise Exception(f"🚫 El pedido con order_id {pedido_cancelado.order_id} está cancelado y no se puede despachar.")
+
+    # ✅ Marcar como despachado
     for pedido in pedidos:
         pedido.estado = "despachado"
         pedido.fecha_despacho = ahora

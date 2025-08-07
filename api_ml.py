@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(m
 logger = logging.getLogger(__name__)
 
 
-def parse_order_data(order_data: dict) -> dict:
+def parse_order_data(order_data: dict, shipment_id: str = None) -> dict:
     """
     De un JSON /orders/{order_id}, extraer:
       - titulo
@@ -45,15 +45,12 @@ def parse_order_data(order_data: dict) -> dict:
     """
     DEFAULT_IMG_LOCAL = DEFAULT_IMG
     cliente = order_data.get("buyer", {}).get("nickname", "Cliente desconocido")
-
-    # Capturamos el logistic_type a nivel pedido
+    order_id = order_data.get("id")
     logistic_type = order_data.get("shipping", {}).get("logistic_type")
 
-    raw_items = order_data.get("order_items", [])
-    if not raw_items:
-        raw_items = order_data.get("items", [])
-
+    raw_items = order_data.get("order_items", []) or order_data.get("items", [])
     items = []
+
     for oi in raw_items:
         prod = oi.get("item", oi)
         titulo = prod.get("title", "Sin título")
@@ -94,20 +91,23 @@ def parse_order_data(order_data: dict) -> dict:
             imgs = [{"url": DEFAULT_IMG_LOCAL, "thumbnail": DEFAULT_IMG_LOCAL}]
 
         items.append({
+            "order_id": order_id,               # ✅ nuevo
+            "shipment_id": shipment_id,         # ✅ nuevo
             "titulo": titulo,
             "sku": sku,
             "variante": variante,
             "cantidad": cantidad,
             "imagenes": imgs,
             "item_id": prod.get("id"),
-            "variation_id": prod.get("variation_id"),
-            "logistic_type": logistic_type  # ✅ ya cargado una sola vez arriba
+            "variation_id": variation_id,
+            "logistic_type": logistic_type
         })
 
     return {
         "cliente": cliente,
         "items": items
     }
+
 
 
 def get_valid_token():
