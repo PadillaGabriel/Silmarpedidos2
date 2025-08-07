@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
-from api_ml import get_order_details, guardar_pedido_en_cache
+from api_ml import get_order_details, guardar_pedido_en_cache, fetch_api
 from database.connection import SessionLocal
 
 webhooks = APIRouter()
@@ -19,19 +19,18 @@ async def recibir_webhook_ml(request: Request):
     resource = data.get("resource")
     print(f"🔔 Notificación recibida: {topic} → {resource}")
 
+
     if topic in ["orders", "orders_v2"] and resource and resource.startswith("/orders/"):
         order_id = resource.split("/")[-1]
         db = SessionLocal()
         try:
-            parsed = await get_order_details(order_id=order_id, db=db)
-            if parsed:
-                await guardar_pedido_en_cache(parsed, db, order_id)
-                print(f"✅ Pedido {order_id} guardado en caché")
-            else:
-                print(f"⚠️ Pedido {order_id} vacío o inválido")
+            # 🔧 Traer JSON crudo de la orden
+            order_raw = fetch_api(f"/orders/{order_id}")
+            # 💾 Guardar directo en cache con datos reales
+            await guardar_pedido_en_cache(order_raw, db, order_id)
+            print(f"✅ Pedido {order_id} guardado en caché")
         except Exception as e:
             print(f"❌ Error procesando pedido {order_id}: {e}")
         finally:
             db.close()
-
     return {"status": "ok"}
