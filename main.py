@@ -416,47 +416,40 @@ async def despachar_get(request: Request, current_user: dict = Depends(get_curre
 
 @app.post("/despachar")
 async def despachar_post(
-    order_id: str = Form(None),
-    shipment_id: str = Form(None),
+    shipment_id: str = Form(...),
     logistica: str = Form(...),
     tipo_envio: str = Form(...),
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     usuario = current_user["username"]
-    id_buscar = shipment_id or order_id
-    if not id_buscar:
-        return {"success": False, "error": "Falta ID"}
 
-    # ✅ Validar si está cancelado localmente
+    # ✅ Validar cancelación en cache local
     pedido_cache = db.query(MLPedidoCache).filter(
-        or_(
-            MLPedidoCache.order_id == id_buscar,
-            MLPedidoCache.shipment_id == id_buscar
-        )
+        MLPedidoCache.shipment_id == shipment_id,
+        MLPedidoCache.estado_ml == "cancelled"
     ).first()
 
-    if pedido_cache and pedido_cache.estado_ml == "cancelled":
-        return {"success": False, "error": "El pedido está cancelado (registro local)."}
+    if pedido_cache:
+        return {"success": False, "error": f"El envío está cancelado (local). order_id={pedido_cache.order_id}"}
 
-    # ✅ Intentar validar con la API oficial si hay token
+    # ✅ Validar cancelación vía API de Mercado Libre (si hay token)
     token = os.getenv("ML_ACCESS_TOKEN")
     if token:
-        url = f"https://api.mercadolibre.com/shipments/{id_buscar}"
+        url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
         headers = {"Authorization": f"Bearer {token}"}
         r = requests.get(url, headers=headers)
         if r.ok:
             data = r.json()
             if data.get("status") == "cancelled":
-                return {"success": False, "error": "El pedido está cancelado (API de ML)."}
+                return {"success": False, "error": "El envío está cancelado (API de ML)."}
 
     # 🚚 Continuar con el despacho
-    ok = marcar_pedido_despachado(db, id_buscar, logistica, tipo_envio, usuario)
+    ok = marcar_pedido_despachado(db, shipment_id, logistica, tipo_envio, usuario)
     return {
         "success": ok,
-        "mensaje": "Pedido despachado correctamente" if ok else "No se pudo despachar"
+        "mensaje": "Envío despachado correctamente" if ok else "No se pudo despachar"
     }
-
 
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):
