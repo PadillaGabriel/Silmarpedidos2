@@ -17,7 +17,7 @@ from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
 
 
 # Configuración
-TOKEN_FILE    = "ml_token.json"
+TOKEN_FILE = os.getenv("ML_TOKEN_PATH", "/app/ml_token.json")
 CLIENT_ID     = "5569606371936049"
 CLIENT_SECRET = "wH7UDWXbA92DVlYa4P50cHBCLrEloMa0"
 API_BASE      = "https://api.mercadolibre.com"
@@ -427,3 +427,85 @@ def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
     except Exception as e:
         print(f"⚠️ Error al obtener logistic_type de shipment {shipment_id}: {e}")
     return None
+
+# api_ml.py (añadí esto)
+def fetch_order_basic(order_id: str) -> dict:
+    token = get_valid_token()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    url = f"{API_BASE}/orders/{order_id}"
+    r = requests.get(url, headers=headers, timeout=6)
+    r.raise_for_status()
+    return r.json()
+
+def parse_order_data_light(order_data: dict, shipment_id: str | None = None) -> dict:
+    """Versión rápida: sin llamadas por imágenes."""
+    cliente = order_data.get("buyer", {}).get("nickname") or "Cliente desconocido"
+    order_id = order_data.get("id")
+    shipping  = order_data.get("shipping", {}) or {}
+    logistic_type = shipping.get("logistic_type")
+    estado_envio  = shipping.get("status")  # ej. ready_to_ship, shipped
+    estado_ml     = order_data.get("status")  # ej. paid, cancelled
+
+    raw_items = order_data.get("order_items", []) or order_data.get("items", [])
+    items = []
+    for oi in raw_items:
+        prod = oi.get("item", oi)
+        attrs = prod.get("variation_attributes", [])
+        variante = " | ".join(
+            f"{a.get('name')}: {a.get('value_name')}" for a in attrs if a.get("value_name")
+        ) or "—"
+        sku = (
+            prod.get("seller_sku")
+            or prod.get("seller_custom_field")
+            or oi.get("seller_custom_field")
+            or oi.get("seller_sku")
+            or ""
+        )
+        items.append({
+            "order_id": order_id,
+            "shipment_id": shipment_id,
+            "titulo": prod.get("title", "Sin título"),
+            "sku": sku,
+            "variante": variante,
+            "cantidad": oi.get("quantity", 0),
+            "item_id": prod.get("id"),
+            "variation_id": prod.get("variation_id"),
+            # sin imágenes acá
+        })
+
+    return {
+        "cliente": cliente,
+        "items": items,
+        "estado_envio": estado_envio,
+        "estado_ml": estado_ml,
+        "logistic_type": logistic_type,
+        "primer_order_id": order_id,
+        "primer_shipment_id": shipment_id,
+    }
+
+def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_light: dict):
+    rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
+    if not rec:
+        rec = MLPedidoCache(shipment_id=shipment_id)
+        db.add(rec)
+
+    # solo seteamos si hay valor (no pisar con None)
+    def set_if(v, cur_attr):
+        if v is not None:
+            setattr(rec, cur_attr, v)
+
+    set_if(order_id, "order_id")
+    set_if(parsed_light.get("cliente"), "cliente")
+    set_if(parsed_light.get("estado_envio"), "estado_envio")
+    set_if(parsed_light.get("estado_ml"), "estado_ml")
+    set_if(parsed_light.get("logistic_type"), "logistic_type")
+
+    # guardamos items “light” (sin imágenes) para que el front ya muestre algo
+    rec.detalle = parsed_light.get("items", [])
+    rec.fecha_consulta = datetime.now(timezone.utc)
+
+    # flags opcionales
+    if hasattr(rec, "is_enriched"):
+        rec.is_enriched = False
+
+    db.commit()

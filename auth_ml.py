@@ -8,7 +8,7 @@ import os
 CLIENT_ID = "5569606371936049"
 CLIENT_SECRET = "wH7UDWXbA92DVlYa4P50cHBCLrEloMa0"
 REDIRECT_URI = "https://controlpedidos.onrender.com/callback"
-TOKEN_PATH = "app/ml_token.json"  # Se guarda aquí el token
+TOKEN_PATH = os.getenv("ML_TOKEN_PATH", "/app/ml_token.json")
 
 # 1. ABRIR URL DE AUTORIZACIÓN
 def solicitar_codigo():
