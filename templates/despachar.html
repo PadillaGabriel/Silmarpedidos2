@@ -85,19 +85,23 @@
   let ultimoOrderId = "";
   let ultimoShipId = "";
 
-function mostrarToastError(mensaje) {
+function mostrarToast(tipo, mensaje) {
   const toast = document.getElementById("toast-alert");
   const body = document.getElementById("toast-body");
+  toast.classList.remove("success","error");
+  toast.classList.add(tipo === "success" ? "success" : "error");
   body.innerText = mensaje;
   toast.classList.add("show");
 }
+
+const mostrarToastSuccess = (msg) => mostrarToast("success", msg);
+const mostrarToastError   = (msg) => mostrarToast("error", msg);
 
 function ocultarToast() {
   const toast = document.getElementById("toast-alert");
   toast.classList.remove("show");
 }
 
-document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
 
 
 
@@ -129,23 +133,13 @@ document.getElementById("toast-close-btn").addEventListener("click", ocultarToas
     }
   }
 
-  async function detenerEscaneo() {
-    if (scanner) {
-      const estado = await scanner.getState();
-      console.log("📡 Estado del escáner:", estado);
-
-      if (estado === Html5QrcodeScannerState.SCANNING || estado === "SCANNING") {
-        try {
-          await scanner.stop();
-          escaneoActivo = false;
-          document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
-          console.log("📴 Escaneo detenido correctamente");
-        } catch (err) {
-          console.error("❌ Error al detener escaneo:", err);
-        }
-      }
+async function detenerEscaneo() {
+      if (!scanner) return;
+      try { await scanner.stop(); } catch (_) {}
+      escaneoActivo = false;
+      document.getElementById("stop-btn").innerText = "Reiniciar escaneo";
     }
-  }
+
 
 
   function mostrarDetalle(detalle) {
@@ -277,6 +271,10 @@ async function buscarManual() {
 window.addEventListener("DOMContentLoaded", () => {
   iniciarEscaneo();
 
+  // Cerrar toast si existe el botón
+  document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
+
+
   document.getElementById("stop-btn").addEventListener("click", async () => {
     const btn = document.getElementById("stop-btn");
 
@@ -296,20 +294,29 @@ window.addEventListener("DOMContentLoaded", () => {
       document.getElementById("estado_envio").innerText = "";
       document.getElementById("order_id_hidden").value = "";
       document.getElementById("shipment_id_hidden").value = "";
-
+      ultimoShipId = "";          // 👈 agregar
+      ultimoOrderId = ""; 
       iniciarEscaneo();
     }
   });
 
-  document.getElementById("input-escanear").addEventListener("change", e => {
+  // Escaneo desde imagen: parar el scanner actual, leer, y reanudar
+  document.getElementById("input-escanear").addEventListener("change", async e => {
     if (!e.target.files.length) return;
-    const qrImg = new Html5Qrcode("reader");
-    qrImg.scanFile(e.target.files[0], true)
-      .then(decoded => {
-        qrImg.clear();
-        escanear(decoded);
-      })
-      .catch(() => mostrarToastError("No se pudo leer el QR."));
+    try {
+      await detenerEscaneo(); // evita colisión con el scanner en vivo
+
+      const qrImg = new Html5Qrcode("reader");
+      const decoded = await qrImg.scanFile(e.target.files[0], true);
+      await qrImg.clear();
+
+      await escanear(decoded);
+    } catch (err) {
+      console.error(err);
+      mostrarToastError("No se pudo leer el QR.");
+    } finally {
+      iniciarEscaneo(); // vuelve a prender la cámara
+    }
   });
 
   document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
@@ -321,7 +328,6 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("shipment_id_hidden").value = ultimoShipId;
     document.getElementById("order_id_hidden").value = ultimoOrderId;
 
-    // Validación por si se rompe algo antes
     if (!ultimoShipId) {
       mostrarToastError("No se detectó un shipment_id válido. Escaneá nuevamente.");
       return;
@@ -329,34 +335,29 @@ window.addEventListener("DOMContentLoaded", () => {
 
     const formData = new FormData(e.target);
 
-try {
-  const resp = await fetch("/despachar", {
-    method: "POST",
-    body: formData
-  });
+    try {
+      const resp = await fetch("/despachar", { method: "POST", body: formData /*, credentials: "include" */ });
 
-  const text = await resp.text();  // 👈 primero leemos como texto
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        const txt = await resp.text();
+        console.error("Respuesta no JSON:", txt);
+        mostrarToastError("Respuesta inválida del servidor.");
+        return;
+      }
 
-  let data;
-  try {
-    data = JSON.parse(text);  // 👈 intentamos parsear JSON
-  } catch (e) {
-    console.error("❌ Respuesta inválida del servidor:", text);
-    mostrarToastError("Respuesta inválida del servidor.");
-    return;
-  }
+      if (!resp.ok || !data.success) {
+        mostrarToastError(data.error || `Error ${resp.status || ""} al despachar.`);
+        return;
+      }
 
-  if (!data.success) {
-    mostrarToastError(data.error || "Error al despachar.");
-    return;
-  }
-
-  mostrarToastSuccess(data.mensaje || "Pedido despachado correctamente.");
-
-} catch (err) {
-  console.error("❌ Error al conectar:", err);
-  mostrarToastError("Error al conectar con el servidor.");
-}
+      mostrarToastSuccess(data.mensaje || "Pedido despachado correctamente.");
+    } catch (err) {
+      console.error("❌ Error al conectar:", err);
+      mostrarToastError("Error al conectar con el servidor.");
+    }
   });
 });
 </script>

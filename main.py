@@ -410,10 +410,19 @@ def estado_envio(shipment_id: str, current_user: dict = Depends(get_current_user
     return {"estado": get_estado_envio(shipment_id)}
 
 @app.get("/despachar", response_class=HTMLResponse)
-async def despachar_get(request: Request, current_user: dict = Depends(get_current_user)):
+async def despachar_get(
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)  # 👈 faltaba inyectar db
+):
     logisticas = get_all_logisticas(db)
-    return templates.TemplateResponse("despachar.html", {"request": request, "usuario": current_user["username"], "logisticas": logisticas})
+    return templates.TemplateResponse(
+        "despachar.html",
+        {"request": request, "usuario": current_user["username"], "logisticas": logisticas}
+    )
 
+
+# --- POST: siempre JSON ---
 @app.post("/despachar")
 async def despachar_post(
     shipment_id: str = Form(...),
@@ -424,33 +433,62 @@ async def despachar_post(
 ):
     usuario = current_user["username"]
 
-    # ✅ Validar cancelación en cache local
-    pedido_cache = db.query(MLPedidoCache).filter(
-        MLPedidoCache.shipment_id == shipment_id,
-        MLPedidoCache.estado_ml == "cancelled"
-    ).first()
+    try:
+        # 1) Validar cancelado en cache local
+        pedido_cache = (
+            db.query(MLPedidoCache)
+              .filter(
+                  MLPedidoCache.shipment_id == shipment_id,
+                  MLPedidoCache.estado_ml == "cancelled"
+              )
+              .first()
+        )
+        if pedido_cache:
+            return JSONResponse(
+                status_code=409,
+                content={"success": False, "error": f"El envío está cancelado (local). order_id={pedido_cache.order_id}"}
+            )
 
-    if pedido_cache:
-        return {"success": False, "error": f"El envío está cancelado (local). order_id={pedido_cache.order_id}"}
+        # 2) Validar cancelado en API de ML (opcional si hay token)
+        token = os.getenv("ML_ACCESS_TOKEN")
+        if token:
+            try:
+                url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
+                headers = {"Authorization": f"Bearer {token}"}
+                r = requests.get(url, headers=headers, timeout=8)
+                if r.ok:
+                    data = r.json()
+                    if data.get("status") == "cancelled":
+                        return JSONResponse(
+                            status_code=409,
+                            content={"success": False, "error": "El envío está cancelado (API de ML)."}
+                        )
+            except requests.RequestException as e:
+                # No bloqueamos el despacho por un fallo de red; solo registramos
+                print(f"⚠️ No se pudo validar en ML: {e}")
 
-    # ✅ Validar cancelación vía API de Mercado Libre (si hay token)
-    token = os.getenv("ML_ACCESS_TOKEN")
-    if token:
-        url = f"https://api.mercadolibre.com/shipments/{shipment_id}"
-        headers = {"Authorization": f"Bearer {token}"}
-        r = requests.get(url, headers=headers)
-        if r.ok:
-            data = r.json()
-            if data.get("status") == "cancelled":
-                return {"success": False, "error": "El envío está cancelado (API de ML)."}
+        # 3) Ejecutar despacho
+        ok = marcar_pedido_despachado(db, shipment_id, logistica, tipo_envio, usuario)
 
-    # 🚚 Continuar con el despacho
-    ok = marcar_pedido_despachado(db, shipment_id, logistica, tipo_envio, usuario)
-    return {
-        "success": ok,
-        "mensaje": "Envío despachado correctamente" if ok else "No se pudo despachar"
-    }
+        if not ok:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "error": "No se pudo despachar. Verificá que todos los ítems estén armados."}
+            )
 
+        return JSONResponse(
+            status_code=200,
+            content={"success": True, "mensaje": "Envío despachado correctamente"}
+        )
+
+    except Exception as e:
+        db.rollback()  # 👈 por si algo falló después de tocar DB
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+    
+    
 @router.get("/dashboard/resumen")
 def resumen_dashboard(db: Session = Depends(get_db)):
     ahora = datetime.now(timezone.utc)
