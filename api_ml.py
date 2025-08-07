@@ -13,12 +13,11 @@ from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
 from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
-import logging
-logger = logging.getLogger("uvicorn.error")
+
 
 
 # Configuración
-TOKEN_FILE = os.getenv("ML_TOKEN_PATH", "/app/ml_token.json")
+TOKEN_FILE    = "ml_token.json"
 CLIENT_ID     = "5569606371936049"
 CLIENT_SECRET = "wH7UDWXbA92DVlYa4P50cHBCLrEloMa0"
 API_BASE      = "https://api.mercadolibre.com"
@@ -162,32 +161,18 @@ def fetch_api(path, params=None, extra_headers=None):
     r.raise_for_status()
     return r.json()
 
-# api_ml.py
 def buscar_order_completo(order_id, headers):
-    """Primero /orders/{id}. Si falla (401/403/404), fallback a /orders/search?order_id=..."""
+    """
+    Intenta traer la orden por /orders/{id}, si falla intenta por /orders/search.
+    """
     try:
         return fetch_api(f"/orders/{order_id}", extra_headers=headers)
-    except Exception as e:
-        logger.warning("⚠️ /orders/%s no accesible → fallback /orders/search", order_id)
-
-        # Tomar seller_id del token (el dueño real de la app)
-        seller_id = None
+    except Exception:
         try:
-            with open(TOKEN_FILE, "r", encoding="utf-8") as f:
-                seller_id = (json.load(f) or {}).get("user_id")
-        except Exception:
-            pass
-
-        qs = f"order_id={order_id}"
-        if seller_id:
-            qs = f"seller={seller_id}&{qs}"
-
-        try:
-            result = fetch_api(f"/orders/search?{qs}", extra_headers=headers)
-            items = result.get("results") or []
-            return items[0] if items else None
-        except Exception as e2:
-            logger.error("❌ fallback /orders/search falló para %s: %s", order_id, e2)
+            result = fetch_api(f"/orders/search?seller=207035636&q={order_id}", extra_headers=headers)
+            return result["results"][0] if result.get("results") else None
+        except Exception as e:
+            logger.warning("No se encontró la orden %s ni por /orders ni por /orders/search: %s", order_id, e)
             return None
 
 
@@ -374,24 +359,24 @@ def guardar_pedido_cache(
         print(f"💥 Error al guardar pedido {order_id}: {e}")
 
 
-# api_ml.py  — reemplazá la función completa
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
     try:
+        # Obtener datos del pedido
         shipment_id = (
-            pedido.get("shipping", {}).get("id")
-            or pedido.get("shipping", {}).get("shipment_id")
-            or pedido.get("shipment", {}).get("id")
+            pedido.get("shipping", {}).get("id") or
+            pedido.get("shipping", {}).get("shipment_id") or
+            pedido.get("shipment", {}).get("id")
         )
 
+        # Si no lo encontramos en el JSON original, lo buscamos con fallback
         if not shipment_id:
+            # Último intento: usar la API si hay token
             token = get_valid_token()
-            if token:
-                r = requests.get(
-                    f"{API_BASE}/orders/{order_id}",
-                    headers={"Authorization": f"Bearer {token}"}, timeout=6
-                )
-                if r.ok:
-                    shipment_id = r.json().get("shipping", {}).get("id")
+            url = f"https://api.mercadolibre.com/orders/{order_id}"
+            headers = {"Authorization": f"Bearer {token}"}
+            r = requests.get(url, headers=headers)
+            if r.ok:
+                shipment_id = r.json().get("shipping", {}).get("id")
 
         if not shipment_id:
             print(f"⚠️ Pedido {order_id} no tiene shipment_id. No se guarda en cache.")
@@ -399,30 +384,34 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
 
         shipment_id = str(shipment_id)
 
-        # ✅ NORMALIZAR SIEMPRE
-        parsed = parse_order_data(pedido, shipment_id=shipment_id)
-        items  = parsed.get("items", [])
-        cliente = parsed.get("cliente", "")
+        cliente = pedido.get("buyer", {}).get("nickname", "")
+        estado_ml = pedido.get("status", "unknown")
+        estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
 
-        # ✅ ENRIQUECER SOBRE LA FORMA NORMALIZADA
+        # Parsear ítems
+        items = pedido.get("order_items", [])
+        if not items:
+            items = pedido.get("items", [])
+
+        # Enriquecer
         token = get_valid_token()
-        if items and token:
+        if items:
             await enriquecer_permalinks(items, token, db)
             await enriquecer_items_ws(items, db)
-        elif not items:
+        else:
             print(f"⚠️ Pedido {order_id} no tiene ítems para enriquecer.")
 
-        # ✅ GUARDAR LA FORMA NORMALIZADA
+        # Guardar
         guardar_pedido_cache(
             db=db,
             shipment_id=shipment_id,
             order_id=order_id,
             cliente=cliente,
-            estado_envio=pedido.get("shipping", {}).get("status", "sin_envio"),
-            estado_ml=pedido.get("status", "unknown"),
+            estado_envio=estado_envio,
+            estado_ml=estado_ml,
             detalle=items
         )
-        print(f"✅ Pedido {order_id} enriquecido y guardado en caché (parseado).")
+        print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
     except Exception as e:
         print(f"❌ Error al guardar pedido {order_id}: {e}")
 
@@ -438,102 +427,3 @@ def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
     except Exception as e:
         print(f"⚠️ Error al obtener logistic_type de shipment {shipment_id}: {e}")
     return None
-
-# api_ml.py
-def fetch_order_basic(order_id: str) -> dict | None:
-    token = get_valid_token()
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
-    url = f"{API_BASE}/orders/{order_id}"
-    try:
-        r = requests.get(url, headers=headers, timeout=6)
-        r.raise_for_status()
-        return r.json()
-    except requests.HTTPError as e:
-        code = getattr(e.response, "status_code", None)
-        logger.warning("⚠️ fetch_order_basic %s → HTTP %s", order_id, code)
-        return None
-    except Exception as e:
-        logger.warning("⚠️ fetch_order_basic %s → error %s", order_id, e)
-        return None
-
-
-
-def parse_order_data_light(order_data: dict, shipment_id: str | None = None) -> dict:
-    """Versión rápida: sin llamadas por imágenes."""
-    cliente = order_data.get("buyer", {}).get("nickname") or "Cliente desconocido"
-    order_id = order_data.get("id")
-    shipping  = order_data.get("shipping", {}) or {}
-    logistic_type = shipping.get("logistic_type")
-    estado_envio  = shipping.get("status")  # ej. ready_to_ship, shipped
-    estado_ml     = order_data.get("status")  # ej. paid, cancelled
-
-    raw_items = order_data.get("order_items", []) or order_data.get("items", [])
-    items = []
-    for oi in raw_items:
-        prod = oi.get("item", oi)
-        attrs = prod.get("variation_attributes", [])
-        variante = " | ".join(
-            f"{a.get('name')}: {a.get('value_name')}" for a in attrs if a.get("value_name")
-        ) or "—"
-        sku = (
-            prod.get("seller_sku")
-            or prod.get("seller_custom_field")
-            or oi.get("seller_custom_field")
-            or oi.get("seller_sku")
-            or ""
-        )
-        items.append({
-            "order_id": order_id,
-            "shipment_id": shipment_id,
-            "titulo": prod.get("title", "Sin título"),
-            "sku": sku,
-            "variante": variante,
-            "cantidad": oi.get("quantity", 0),
-            "item_id": prod.get("id"),
-            "variation_id": prod.get("variation_id"),
-            # sin imágenes acá
-        })
-
-    return {
-        "cliente": cliente,
-        "items": items,
-        "estado_envio": estado_envio,
-        "estado_ml": estado_ml,
-        "logistic_type": logistic_type,
-        "primer_order_id": order_id,
-        "primer_shipment_id": shipment_id,
-    }
-
-def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_light: dict):
-    rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-    if not rec:
-        rec = MLPedidoCache(shipment_id=shipment_id)
-        db.add(rec)
-
-    def set_if(v, attr):
-        if v is not None:
-            setattr(rec, attr, v)
-
-    set_if(order_id, "order_id")
-    set_if(parsed_light.get("cliente"), "cliente")
-    set_if(parsed_light.get("estado_envio"), "estado_envio")
-    set_if(parsed_light.get("estado_ml"), "estado_ml")
-    set_if(parsed_light.get("logistic_type"), "logistic_type")
-
-    rec.detalle = parsed_light.get("items", [])
-    rec.fecha_consulta = datetime.now(timezone.utc)
-    if hasattr(rec, "is_enriched"):
-        rec.is_enriched = False
-
-    db.commit()
-
-    # 👇 LOG CLAVE
-    logger.info(
-        "💾 upsert_cache_basic OK → shipment=%s order=%s cliente=%s estado_envio=%s estado_ml=%s items=%s",
-        shipment_id,
-        order_id,
-        parsed_light.get("cliente"),
-        parsed_light.get("estado_envio"),
-        parsed_light.get("estado_ml"),
-        len(parsed_light.get("items") or []),
-    )

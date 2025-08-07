@@ -1,190 +1,37 @@
-# webhooks.py
-import asyncio
-import logging
-import re
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter, Request, Depends
 from sqlalchemy.orm import Session
+from api_ml import get_order_details, guardar_pedido_en_cache
 from database.connection import SessionLocal
-from database.models import MLPedidoCache
-from datetime import datetime, timezone
 
-from api_ml import (
-    fetch_order_basic,
-    parse_order_data_light,
-    get_valid_token,
-    get_order_details,
-    upsert_cache_basic,
-    buscar_order_completo,
-    # 👇 lo usamos directo en SHIPMENT y fallback de ORDER
-    fetch_api,
-)
-
-logger = logging.getLogger("uvicorn.error")
 webhooks = APIRouter()
 
 
-def enrich_bg(shipment_id: str):
-    db = SessionLocal()
-    try:
-        asyncio.run(get_order_details(shipment_id=shipment_id, db=db))  # esto ya escribe todo con imágenes
-        rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-        if rec and hasattr(rec, "is_enriched"):
-            rec.is_enriched = True
-            rec.last_enriched_at = datetime.now(timezone.utc)
-            db.commit()
-    finally:
-        db.close()
-
-
-def _rid():
-    # id corto para correlacionar logs de una misma request
-    return datetime.utcnow().strftime("%H%M%S.%f")[-6:]
-
-
 @webhooks.post("/ml")
-async def recibir_webhook_ml(request: Request, background: BackgroundTasks):
-    rid = _rid()
-    data = await request.json()
-    topic = data.get("topic") or ""
-    resource = data.get("resource") or ""
-    logger.info("📬[%s] ML webhook: topic=%s resource=%s", rid, topic, resource)
-
-    # Inicializar siempre
-    order_id: str | None = None
-    shipment_id: str | None = None
-
-    # Parsear SOLO números: evita /orders/feedback
-    m = re.match(r"^/orders/(\d+)(?:/.*)?$", resource)
-    if m:
-        order_id = m.group(1)
-
-    m = re.match(r"^/shipments/(\d+)", resource)
-    if m:
-        shipment_id = m.group(1)
-
-    logger.info("🆔[%s] IDs parseados -> order_id=%s shipment_id=%s", rid, order_id, shipment_id)
-
-    db: Session = SessionLocal()
+async def recibir_webhook_ml(request: Request):
     try:
-        # =======================
-        # --- PATH: ORDER ---
-        # =======================
-        if order_id and not shipment_id:
-            logger.info("🔎[%s] fetch_order_basic(%s)", rid, order_id)
-            od = fetch_order_basic(order_id)
+        data = await request.json()
+        print("📦 Webhook recibido (raw JSON):", data)
+    except Exception as e:
+        print("❌ Error al leer el cuerpo del webhook:", e)
+        return {"status": "error", "detail": "Invalid JSON"}
 
-            # Fallback 1: /orders/search con seller del token
-            if od is None:
-                logger.warning("⚠️[%s] /orders/%s no accesible → fallback /orders/search", rid, order_id)
-                token = get_valid_token()
-                headers = {"Authorization": f"Bearer {token}"} if token else {}
-                od = buscar_order_completo(order_id, headers)
+    topic = data.get("topic")
+    resource = data.get("resource")
+    print(f"🔔 Notificación recibida: {topic} → {resource}")
 
-            # Fallback 2: si sigue sin order, intentar encontrar shipment por búsqueda
-            if not od:
-                try:
-                    logger.info("🧭[%s] intentando /shipments/search?order_id=%s", rid, order_id)
-                    token = get_valid_token()
-                    headers = {"Authorization": f"Bearer {token}"} if token else {}
-                    ships = fetch_api("/shipments/search",
-                                      params={"order_id": order_id},
-                                      extra_headers=headers)   # 👈 reutiliza el MISMO token
-                    results = (ships.get("results") or [])
-                    if results:
-                        shipment_id = str(results[0].get("id") or "")
-                except Exception as e:
-                    logger.warning("⚠️[%s] /shipments/search fallo: %s", rid, e)
+    if topic in ["orders", "orders_v2"] and resource and resource.startswith("/orders/"):
+        order_id = resource.split("/")[-1]
+        db = SessionLocal()
+        try:
+            parsed = await get_order_details(order_id=order_id, db=db)
+            if parsed:
+                await guardar_pedido_en_cache(parsed, db, order_id)
+                print(f"✅ Pedido {order_id} guardado en caché")
+            else:
+                print(f"⚠️ Pedido {order_id} vacío o inválido")
+        except Exception as e:
+            print(f"❌ Error procesando pedido {order_id}: {e}")
+        finally:
+            db.close()
 
-            # Último recurso: STUB si no hay od ni shipment
-            if not od and not shipment_id:
-                try:
-                    rec = db.query(MLPedidoCache).filter_by(order_id=order_id).one_or_none()
-                    if not rec:
-                        rec = MLPedidoCache(
-                            order_id=order_id,
-                            fecha_consulta=datetime.now(timezone.utc),
-                            estado_ml="unknown",
-                            estado_envio=None,
-                            detalle=[]
-                        )
-                        db.add(rec)
-                        db.commit()
-                        logger.info("🧷[%s] STUB guardado en cache para order_id=%s", rid, order_id)
-                except Exception as e:
-                    logger.warning("⚠️[%s] no se pudo guardar STUB order_id=%s: %s", rid, order_id, e)
-                return {"ok": True, "skipped": True, "reason": "order_not_accessible"}
-
-            # Si llegamos acá, tenemos 'od' o al menos 'shipment_id'
-            if not shipment_id:
-                shipment_id = str(od.get("shipping", {}).get("id") or "")
-
-            if not shipment_id:
-                logger.warning("⚠️[%s] order_id=%s sin shipment_id → upsert por order igual", rid, order_id)
-                parsed_light = parse_order_data_light(od or {}, shipment_id=None)
-                upsert_cache_basic(db, shipment_id="", order_id=order_id, parsed_light=parsed_light)
-                return {"ok": True, "mode": "order_light_no_shipment"}
-
-            parsed_light = parse_order_data_light(od or {}, shipment_id=shipment_id)
-            logger.info(
-                "📝[%s] Upsert light (ORDER) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
-                rid, shipment_id, order_id,
-                parsed_light.get("cliente"),
-                parsed_light.get("estado_envio"),
-                parsed_light.get("estado_ml"),
-                len(parsed_light.get("items") or []),
-            )
-            upsert_cache_basic(db, shipment_id=shipment_id, order_id=order_id, parsed_light=parsed_light)
-
-            # Verificación inmediata post-commit
-            rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-            logger.info(
-                "✅[%s] Cache guardada sid=%s encontrado=%s items=%d",
-                rid, shipment_id, bool(rec), len((rec and rec.detalle) or [])
-            )
-
-            background.add_task(enrich_bg, shipment_id)
-            return {"ok": True, "mode": "order_light", "shipment_id": shipment_id}
-
-        # =========================
-        # --- PATH: SHIPMENT ---
-        # =========================
-        if shipment_id and not order_id:
-            try:
-                logger.info("🔎[%s] fetch_api(/shipments/%s)", rid, shipment_id)
-                ship = fetch_api(f"/shipments/{shipment_id}")
-                order_id = str(ship.get("order_id") or (ship.get("order") or {}).get("id") or "")
-                ship_status = ship.get("status")
-            except Exception as e:
-                logger.warning("⚠️[%s] /shipments/%s fallo: %s", rid, shipment_id, e)
-                order_id = ""
-                ship_status = None
-
-            od = fetch_order_basic(order_id) if order_id else None
-            parsed_light = (
-                parse_order_data_light(od, shipment_id=shipment_id)
-                if od else {"cliente": None, "estado_envio": ship_status, "estado_ml": None, "items": []}
-            )
-            logger.info(
-                "📝[%s] Upsert light (SHIPMENT) sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
-                rid, shipment_id, order_id or "",
-                parsed_light.get("cliente"),
-                parsed_light.get("estado_envio"),
-                parsed_light.get("estado_ml"),
-                len(parsed_light.get("items") or []),
-            )
-            upsert_cache_basic(db, shipment_id=shipment_id, order_id=order_id or "", parsed_light=parsed_light)
-
-            rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
-            logger.info(
-                "✅[%s] Cache guardada sid=%s encontrado=%s items=%d",
-                rid, shipment_id, bool(rec), len((rec and rec.detalle) or [])
-            )
-
-            background.add_task(enrich_bg, shipment_id)
-            return {"ok": True, "mode": "shipment_light", "shipment_id": shipment_id}
-
-        logger.info("↪️[%s] Notificación omitida (resource=%s)", rid, resource)
-        return {"ok": True, "skipped": True}
-
-    finally:
-        db.close()
+    return {"status": "ok"}
