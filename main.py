@@ -383,47 +383,52 @@ async def escanear_post(
 
 # 1) Si tengo shipment_id, intento Cache FIRST (multi-orden)
         if shipment_id:
-            recs = (db.query(MLPedidoCache)
-                    .filter(MLPedidoCache.shipment_id == shipment_id)
-                    .order_by(MLPedidoCache.fecha_consulta.desc(), MLPedidoCache.id.desc())
-                    .all())
+            recs = (
+                db.query(MLPedidoCache)
+                .filter(MLPedidoCache.shipment_id == shipment_id)
+                .all()
+            )
 
             if recs:
-                # merge de info
-                items = []
-                order_ids = []
+                # tomar el más reciente sin ordenar en SQL (por si no tenés índices/columnas extra)
+                reciente = max(recs, key=lambda r: r.fecha_consulta or datetime.min.replace(tzinfo=timezone.utc))
+
+                # merge de info de TODAS las filas con ese shipment (multi-orden)
+                items, order_ids = [], []
                 cliente = ""
                 estado_envio = ""
                 estado_ml = ""
 
                 for r in recs:
                     if r.order_id: order_ids.append(r.order_id)
-                    if not cliente and r.cliente: cliente = r.cliente
-                    if not estado_envio and r.estado_envio: estado_envio = r.estado_envio
-                    if not estado_ml and r.estado_ml: estado_ml = r.estado_ml
-                    if r.detalle:
+                    if not cliente and getattr(r, "cliente", None): cliente = r.cliente
+                    if not estado_envio and getattr(r, "estado_envio", None): estado_envio = r.estado_envio
+                    if not estado_ml and getattr(r, "estado_ml", None): estado_ml = r.estado_ml
+                    if getattr(r, "detalle", None):
                         try:
-                            items.extend(r.detalle)   # si ya guardás JSON en 'detalle'
+                            items.extend(r.detalle)  # si 'detalle' ya es JSON/List
                         except Exception:
                             pass
 
-                order_ids = list(dict.fromkeys(order_ids))  # únicos, preservando orden
+                order_ids = list(dict.fromkeys(order_ids))  # únicos
 
                 detalle = {
                     "primer_shipment_id": shipment_id,
-                    "order_ids": order_ids,           # 👈 todos los orders de ese envío
+                    "order_ids": order_ids,           # 👈 todas las órdenes del envío
                     "cliente": cliente,
                     "estado_envio": estado_envio,
                     "estado_ml": estado_ml,
                     "items": items or []
                 }
 
-                # opcional: disparar enriquecimiento en bg
+                # TTL de cache opcional
+                ahora = datetime.now(timezone.utc)
+                fresca = reciente.fecha_consulta and (ahora - reciente.fecha_consulta) < timedelta(minutes=TTL_MIN)
+
                 if background:
                     background.add_task(_enriquecer_bg, shipment_id)
 
-                return {"success": True, "detalle": detalle}
-
+                return {"success": True, "detalle": detalle, **({} if fresca else {"incomplete": True})}
 
         # 2) No hay cache útil → usa flujo consolidado (resolverá shipment si entra solo order)
         detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
