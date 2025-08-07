@@ -425,13 +425,21 @@ def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
     return None
 
 # api_ml.py (añadí esto)
-def fetch_order_basic(order_id: str) -> dict:
+# api_ml.py
+def fetch_order_basic(order_id: str) -> dict | None:
     token = get_valid_token()
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     url = f"{API_BASE}/orders/{order_id}"
     r = requests.get(url, headers=headers, timeout=6)
+
+    # Si el token no tiene acceso a esa orden, no rompas el flujo
+    if r.status_code in (401, 403):
+        logger.warning("fetch_order_basic %s -> %s", order_id, r.status_code)
+        return None
+
     r.raise_for_status()
     return r.json()
+
 
 def parse_order_data_light(order_data: dict, shipment_id: str | None = None) -> dict:
     """Versión rápida: sin llamadas por imágenes."""
