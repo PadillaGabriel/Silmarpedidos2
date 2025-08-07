@@ -206,9 +206,3 @@ async def enriquecer_items_ws(items: list, db: Session):
             item["codigo_alfa"] = info["item_vendorCode"]
 
 
-
-
-
-
-
-

@@ -6,7 +6,7 @@ import logging
 import asyncio
 import requests
 import httpx
-
+from fastapi import BackgroundTasks
 from io import StringIO
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone, time
@@ -25,7 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from passlib.hash import bcrypt
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, or_
 
 
 # Inicialización DB
@@ -74,6 +74,29 @@ app.include_router(webhooks, prefix="/webhooks")
 db = SessionLocal()
 router = APIRouter()
 
+TTL_MIN = 10
+
+def _enriquecer_bg(shipment_id: str):
+    """Enriquecimiento en segundo plano (no bloquea la request)."""
+    db = SessionLocal()
+    try:
+        # Reusa tu flujo "bueno" por shipment_id (esto escribe cache completa)
+        import asyncio
+        asyncio.run(get_order_details(shipment_id=shipment_id, db=db))
+        # Si querés marcar flags (is_enriched/last_enriched_at), podés hacerlo acá.
+        rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
+        if rec:
+            # Si tenés estos campos en tu modelo, marcá enriquecido:
+            if hasattr(rec, "is_enriched"):
+                rec.is_enriched = True
+            if hasattr(rec, "last_enriched_at"):
+                rec.last_enriched_at = datetime.now(timezone.utc)
+            db.commit()
+    except Exception as e:
+        print(f"⚠️ Enriquecimiento falló para {shipment_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
         
 @app.on_event("startup")
 def startup():
@@ -338,24 +361,87 @@ async def historial_get(
 async def escanear_get(request: Request, current_user: dict = Depends(get_current_user)):
     return templates.TemplateResponse("escanear.html", {"request": request, "usuario": current_user["username"]})
 
+
 @app.post("/escanear", response_class=JSONResponse)
-async def escanear_post(request: Request, order_id: str = Form(None), shipment_id: str = Form(None), current_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
+async def escanear_post(
+    request: Request,
+    order_id: str = Form(None),
+    shipment_id: str = Form(None),
+    background: BackgroundTasks = None,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        if not order_id and not shipment_id:
+            return JSONResponse(status_code=400, content={"success": False, "error": "Falta order_id o shipment_id"})
 
-    if detalle.get("cliente") == "Error" or not detalle.get("items"):
-        return {"success": False, "error": "Pedido Cancelado"}
+        # 1) Si tengo shipment_id, intento Cache FIRST
+        if shipment_id:
+            rec = db.query(MLPedidoCache).filter_by(shipment_id=shipment_id).one_or_none()
+            if rec:
+                # cache fresca y (opcionalmente) enriquecida
+                fresca = (
+                    rec.fecha_consulta
+                    and (datetime.now(timezone.utc) - rec.fecha_consulta) < timedelta(minutes=TTL_MIN)
+                )
+                # si tenés flags:
+                enriquecida = getattr(rec, "is_enriched", True)
 
-    if not any(p["shipment_id"] == shipment_id for p in get_all_pedidos(shipment_id=shipment_id)):
-        primer_oid = detalle.get("primer_order_id")
-        if primer_oid:
-            mini = [
-                {"order_id": primer_oid, "titulo": i["titulo"], "cantidad": i["cantidad"], "shipment_id": shipment_id}
-                for i in detalle["items"]
-            ]
-            add_order_if_not_exists({"cliente": detalle["cliente"], "items": mini})
+                detalle_cache = {
+                    "cliente": rec.cliente,
+                    "items": rec.detalle or [],
+                    "estado_envio": rec.estado_envio,
+                    "estado_ml": rec.estado_ml,
+                    "primer_order_id": rec.order_id,
+                    "primer_shipment_id": rec.shipment_id,
+                }
 
-    return {"success": True, "detalle": detalle}
+                if fresca and enriquecida:
+                    # 🚀 devolver inmediato
+                    return {"success": True, "detalle": detalle_cache}
 
+                # devolver parcial y enriquecer atrás
+                if background:
+                    background.add_task(_enriquecer_bg, shipment_id)
+                return {"success": True, "detalle": detalle_cache, "incomplete": True}
+
+        # 2) No hay cache útil → usa flujo consolidado (resolverá shipment si entra solo order)
+        detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
+
+        # Resuelve SID por si vino vacío
+        sid = shipment_id or detalle.get("primer_shipment_id")
+
+        # 3) Validaciones
+        if detalle.get("cliente") == "Error" or not detalle.get("items"):
+            estado_ml = detalle.get("estado_ml")
+            msg = "Pedido cancelado" if (estado_ml == "cancelled") else "No se encontraron ítems para este pedido"
+            return JSONResponse(status_code=404, content={"success": False, "error": msg, "shipment_id": sid, "order_id": order_id})
+
+        # 4) Alta mínima en tu tabla de “pedidos a armar” si no existe
+        #    (usando el SID resuelto para evitar None)
+        try:
+            sid_for_check = sid
+            if sid_for_check and not any(p["shipment_id"] == sid_for_check for p in get_all_pedidos(shipment_id=sid_for_check)):
+                primer_oid = detalle.get("primer_order_id")
+                if primer_oid:
+                    mini = [
+                        {"order_id": primer_oid, "titulo": i["titulo"], "cantidad": i["cantidad"], "shipment_id": sid_for_check}
+                        for i in detalle["items"]
+                    ]
+                    add_order_if_not_exists({"cliente": detalle["cliente"], "items": mini})
+        except Exception as e:
+            # No bloquees el flujo si falla el alta mínima
+            print(f"⚠️ No se pudo preparar alta mínima en 'pedidos': {e}")
+
+        # 5) Enriquecer en background si todavía no hay cache enriquecida
+        if sid and background:
+            background.add_task(_enriquecer_bg, sid)
+
+        return {"success": True, "detalle": detalle}
+
+    except Exception as e:
+        print(f"❌ /escanear error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": "Error interno"})
 
 
 @app.post("/decode-qr", response_class=JSONResponse)
@@ -494,62 +580,89 @@ def resumen_dashboard(db: Session = Depends(get_db)):
     ahora = datetime.now(timezone.utc)
     hoy = ahora.date()
 
-    # Inicio: ayer a las 14:00 hs (UTC)
+    # Ventana: de ayer 14:00 a hoy 14:00 (UTC)
     inicio = datetime.combine(hoy - timedelta(days=1), time(14, 0)).astimezone(timezone.utc)
-
-    # Fin: hoy a las 14:00 hs (UTC)
-    fin = datetime.combine(hoy, time(14, 0)).astimezone(timezone.utc)
+    fin    = datetime.combine(hoy,                 time(14, 0)).astimezone(timezone.utc)
 
     print("🧪 Ventana de conteo:", inicio.isoformat(), "→", fin.isoformat())
 
-    # === FLEX: self_service ===
-    flex_base = db.query(MLPedidoCache.shipment_id).filter(
-        MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta.between(inicio, fin),
-        MLPedidoCache.logistic_type == 'self_service'
-    ).distinct()
+    # 🚫 Excluir FULL (fulfillment) en todas las consultas
+    no_full = (MLPedidoCache.logistic_type != 'fulfillment')
 
-    # Total de shipments únicos que no están armados
-    flex_total = flex_base\
-        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)\
-        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
+    # === FLEX: self_service ===
+    flex_base = (
+        db.query(MLPedidoCache.shipment_id)
+          .filter(
+              MLPedidoCache.estado_ml != 'cancelled',
+              MLPedidoCache.fecha_consulta.between(inicio, fin),
+              MLPedidoCache.logistic_type == 'self_service',
+              no_full
+          )
+          .distinct()
+    )
+
+    # Total de shipments únicos que NO están armados
+    flex_total = (
+        flex_base
+        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)
+        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))
         .count()
+    )
 
     # Shipments armados
-    flex_armados = db.query(func.count(distinct(Pedido.shipment_id)))\
-        .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)\
-        .filter(
-            Pedido.estado == 'armado',
-            Pedido.fecha_armado.between(inicio, fin),
-            MLPedidoCache.logistic_type == 'self_service'
-        ).scalar()
+    flex_armados = (
+        db.query(func.count(distinct(Pedido.shipment_id)))
+          .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)
+          .filter(
+              Pedido.estado == 'armado',
+              Pedido.fecha_armado.between(inicio, fin),
+              MLPedidoCache.logistic_type == 'self_service',
+              no_full
+          )
+          .scalar()
+    )
 
     # === COLECTA: cross_docking ===
-    colecta_base = db.query(MLPedidoCache.shipment_id).filter(
-        MLPedidoCache.estado_ml != 'cancelled',
-        MLPedidoCache.fecha_consulta.between(inicio, fin),
-        MLPedidoCache.logistic_type == 'cross_docking'
-    ).distinct()
+    colecta_base = (
+        db.query(MLPedidoCache.shipment_id)
+          .filter(
+              MLPedidoCache.estado_ml != 'cancelled',
+              MLPedidoCache.fecha_consulta.between(inicio, fin),
+              MLPedidoCache.logistic_type == 'cross_docking',
+              no_full
+          )
+          .distinct()
+    )
 
-    colecta_total = colecta_base\
-        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)\
-        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))\
+    colecta_total = (
+        colecta_base
+        .outerjoin(Pedido, MLPedidoCache.shipment_id == Pedido.shipment_id)
+        .filter(or_(Pedido.estado == None, Pedido.estado != 'armado'))
         .count()
+    )
 
-    colecta_armados = db.query(func.count(distinct(Pedido.shipment_id)))\
-        .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)\
-        .filter(
-            Pedido.estado == 'armado',
-            Pedido.fecha_armado.between(inicio, fin),
-            MLPedidoCache.logistic_type == 'cross_docking'
-        ).scalar()
+    colecta_armados = (
+        db.query(func.count(distinct(Pedido.shipment_id)))
+          .join(MLPedidoCache, MLPedidoCache.shipment_id == Pedido.shipment_id)
+          .filter(
+              Pedido.estado == 'armado',
+              Pedido.fecha_armado.between(inicio, fin),
+              MLPedidoCache.logistic_type == 'cross_docking',
+              no_full
+          )
+          .scalar()
+    )
 
-    # Cancelados (por shipment)
-    cancelados = db.query(distinct(MLPedidoCache.shipment_id))\
-        .filter(
-            MLPedidoCache.estado_ml == 'cancelled',
-            MLPedidoCache.fecha_consulta.between(inicio, fin)
-        ).all()
+    # Cancelados (por shipment) — también excluimos FULL
+    cancelados = (
+        db.query(distinct(MLPedidoCache.shipment_id))
+          .filter(
+              MLPedidoCache.estado_ml == 'cancelled',
+              MLPedidoCache.fecha_consulta.between(inicio, fin),
+              no_full
+          )
+          .all()
+    )
     cancelados_ids = [r[0] for r in cancelados]
 
     return {
