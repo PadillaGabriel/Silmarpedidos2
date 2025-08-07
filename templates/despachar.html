@@ -268,62 +268,77 @@
   }
 
 
-  window.addEventListener("DOMContentLoaded", () => {
-    iniciarEscaneo()
-    document.getElementById("stop-btn").addEventListener("click", async () => {
-      const btn = document.getElementById("stop-btn");
+window.addEventListener("DOMContentLoaded", () => {
+  iniciarEscaneo();
 
-      if (scanner && escaneoActivo) {
-        try {
-          await scanner.stop();
-          escaneoActivo = false;
-          btn.innerText = "Reiniciar escaneo";
-        } catch (err) {
-          console.error("❌ Error al detener el escáner:", err);
-        }
-      } else {
-        // Limpiar vista antes de reiniciar
-        document.getElementById("detalle-pedido").style.display = "none";
-        document.getElementById("tabla-items-despachar").innerHTML = "";
-        document.getElementById("cliente").innerText = "";
-        document.getElementById("estado_envio").innerText = "";
-        document.getElementById("order_id_hidden").value = "";
-        document.getElementById("shipment_id_hidden").value = "";
+  document.getElementById("stop-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("stop-btn");
 
-        iniciarEscaneo();
-      }
-    });
-    document.getElementById("input-escanear").addEventListener("change", e => {
-      if (!e.target.files.length) return;
-      const qrImg = new Html5Qrcode("reader");
-      qrImg.scanFile(e.target.files[0], true)
-        .then(decoded => {
-          qrImg.clear();
-          escanear(decoded);
-        })
-        .catch(() => mostrarToastError("No se pudo leer el QR."));
-    });
-    document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
-    document.getElementById("despachar-form").addEventListener("submit", async e => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
+    if (scanner && escaneoActivo) {
       try {
-        const resp = await fetch("/despachar", {
-          method: "POST",
-          body: formData
-        });
-        const data = await resp.json();
-        if (!data.success) {
-          mostrarToastError(data.error || "Error al despachar.");
-          return;
-        }
-        mostrarToastError(data.mensaje || "Pedido despachado correctamente."); // opcional
-      } catch {
-        mostrarToastError("Error al conectar con el servidor.");
+        await scanner.stop();
+        escaneoActivo = false;
+        btn.innerText = "Reiniciar escaneo";
+      } catch (err) {
+        console.error("❌ Error al detener el escáner:", err);
       }
-    });
-  });
-  document.getElementById("toast-close-btn").addEventListener("click", ocultarToast);
+    } else {
+      // Limpiar vista antes de reiniciar
+      document.getElementById("detalle-pedido").style.display = "none";
+      document.getElementById("tabla-items-despachar").innerHTML = "";
+      document.getElementById("cliente").innerText = "";
+      document.getElementById("estado_envio").innerText = "";
+      document.getElementById("order_id_hidden").value = "";
+      document.getElementById("shipment_id_hidden").value = "";
 
+      iniciarEscaneo();
+    }
+  });
+
+  document.getElementById("input-escanear").addEventListener("change", e => {
+    if (!e.target.files.length) return;
+    const qrImg = new Html5Qrcode("reader");
+    qrImg.scanFile(e.target.files[0], true)
+      .then(decoded => {
+        qrImg.clear();
+        escanear(decoded);
+      })
+      .catch(() => mostrarToastError("No se pudo leer el QR."));
+  });
+
+  document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
+
+  document.getElementById("despachar-form").addEventListener("submit", async e => {
+    e.preventDefault();
+
+    // Refuerzo: asegurar valores
+    document.getElementById("shipment_id_hidden").value = ultimoShipId;
+    document.getElementById("order_id_hidden").value = ultimoOrderId;
+
+    // Validación por si se rompe algo antes
+    if (!ultimoShipId) {
+      mostrarToastError("No se detectó un shipment_id válido. Escaneá nuevamente.");
+      return;
+    }
+
+    const formData = new FormData(e.target);
+
+    try {
+      const resp = await fetch("/despachar", {
+        method: "POST",
+        body: formData
+      });
+      const data = await resp.json();
+      if (!data.success) {
+        mostrarToastError(data.error || "Error al despachar.");
+        return;
+      }
+      mostrarToastSuccess(data.mensaje || "Pedido despachado correctamente.");
+    } catch {
+      mostrarToastError("Error al conectar con el servidor.");
+    }
+  });
+});
 </script>
+
 {% endblock %}
