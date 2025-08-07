@@ -264,17 +264,11 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
                 if cliente is None:
                     cliente = od.get("buyer", {}).get("nickname", "Cliente desconocido")
 
-                for oi in od.get("order_items", []):
-                    prod = oi.get("item", oi)
-                    if prod.get("id") == entry.get("item_id") and prod.get("variation_id") == entry.get("variation_id"):
-                        temp_order = {
-                            "buyer": od.get("buyer", {}),
-                            "order_items": [oi]
-                        }
-                        detalle_unico = parse_order_data(temp_order)
-                        if detalle_unico.get("items"):
-                            all_items.extend(detalle_unico["items"])
-                        break
+                # Procesar la orden completa sin filtrar
+                detalle_completo = parse_order_data(od)
+                if detalle_completo.get("items"):
+                    all_items.extend(detalle_completo["items"])
+
 
             await enriquecer_permalinks(all_items, token, db)
             await enriquecer_items_ws(all_items, db)
