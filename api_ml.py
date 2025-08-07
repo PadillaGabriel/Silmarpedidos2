@@ -164,17 +164,31 @@ def fetch_api(path, params=None, extra_headers=None):
 
 def buscar_order_completo(order_id, headers):
     """
-    Intenta traer la orden por /orders/{id}, si falla intenta por /orders/search.
+    Trae la orden por /orders/{id}. Si no se puede (403/401),
+    usa /orders/search con el seller_id del token actual.
     """
+    # 1) Intento directo
     try:
         return fetch_api(f"/orders/{order_id}", extra_headers=headers)
-    except Exception:
-        try:
-            result = fetch_api(f"/orders/search?seller=207035636&q={order_id}", extra_headers=headers)
-            return result["results"][0] if result.get("results") else None
-        except Exception as e:
-            logger.warning("No se encontró la orden %s ni por /orders ni por /orders/search: %s", order_id, e)
-            return None
+    except requests.HTTPError as e:
+        code = getattr(e.response, "status_code", None)
+        logger.warning("⚠️ /orders/%s devolvió %s. Fallback a /orders/search", order_id, code)
+    except Exception as e:
+        logger.warning("⚠️ /orders/%s error: %s. Fallback a /orders/search", order_id, e)
+
+    # 2) Fallback con seller dinámico
+    seller_id = get_token_user_id()
+    if not seller_id:
+        logger.error("❌ Sin seller_id (user_id) para /orders/search. No se puede fallback.")
+        return None
+
+    try:
+        result = fetch_api(f"/orders/search?seller={seller_id}&q={order_id}", extra_headers=headers)
+        return result["results"][0] if result.get("results") else None
+    except Exception as e:
+        logger.warning("⚠️ /orders/search no devolvió resultados para %s (seller=%s): %s",
+                       order_id, seller_id, e)
+        return None
 
 
 
@@ -427,22 +441,21 @@ def obtener_logistic_type_desde_envio(shipment_id: str) -> str | None:
 
 # api_ml.py
 def fetch_order_basic(order_id: str) -> dict | None:
-    # Solo aceptamos IDs numéricos
-    if not order_id or not str(order_id).isdigit():
-        return None
-
     token = get_valid_token()
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     url = f"{API_BASE}/orders/{order_id}"
-    r = requests.get(url, headers=headers, timeout=6)
-
-    # Si no hay permiso o no existe, devolvé None y dejá que el caller haga fallback
-    if r.status_code in (401, 403, 404):
-        logger.warning("fetch_order_basic %s -> %s", order_id, r.status_code)
+    try:
+        r = requests.get(url, headers=headers, timeout=6)
+        r.raise_for_status()
+        return r.json()
+    except requests.HTTPError as e:
+        code = getattr(e.response, "status_code", None)
+        logger.warning("⚠️ fetch_order_basic %s → HTTP %s", order_id, code)
+        return None
+    except Exception as e:
+        logger.warning("⚠️ fetch_order_basic %s → error %s", order_id, e)
         return None
 
-    r.raise_for_status()
-    return r.json()
 
 
 def parse_order_data_light(order_data: dict, shipment_id: str | None = None) -> dict:
@@ -515,3 +528,12 @@ def upsert_cache_basic(db: Session, *, shipment_id: str, order_id: str, parsed_l
         "💾 UPSERT cache sid=%s oid=%s cliente=%s estado_envio=%s estado_ml=%s items=%d",
         shipment_id, rec.order_id, rec.cliente, rec.estado_envio, rec.estado_ml, len(rec.detalle or [])
     )
+
+def get_token_user_id() -> str:
+    try:
+        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return str(data.get("user_id") or "")
+    except Exception as e:
+        logger.warning("No se pudo leer user_id desde %s: %s", TOKEN_FILE, e)
+        return ""
