@@ -444,17 +444,23 @@ async def escanear_post(
         return JSONResponse(status_code=500, content={"success": False, "error": "Error interno"})
 
 
+# main.py — reemplazá /decode-qr
 @app.post("/decode-qr", response_class=JSONResponse)
-async def decode_qr(frame: UploadFile = File(...)):
+async def decode_qr(frame: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await frame.read()
     arr = np.frombuffer(content, np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    detector = cv2.QRCodeDetector()
-    data, _, _ = detector.detectAndDecode(img)
-    if data:
-        detalle = await escanear_post(request=None, order_id=None, shipment_id=data)
-        return {"data": data, "detalle": detalle.get("detalle")}
-    return {"data": None, "error": "QR no detectado"}
+    data, _, _ = cv2.QRCodeDetector().detectAndDecode(img)
+
+    if not data:
+        return {"data": None, "error": "QR no detectado"}
+
+    # Igual que /escanear, pero directo:
+    detalle = await get_order_details(shipment_id=data, db=db)
+    if detalle.get("cliente") == "Error" or not detalle.get("items"):
+        return {"data": data, "error": "No se encontraron ítems para este pedido", "detalle": None}
+
+    return {"data": data, "detalle": detalle}
 
 @app.post("/armar", response_class=JSONResponse)
 async def armar_post(

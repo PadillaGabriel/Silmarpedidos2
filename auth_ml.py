@@ -45,8 +45,9 @@ def obtener_token(code):
         print("❌ Error al obtener el token:", response.status_code)
         print(response.json())
 
+# auth_ml.py — reemplazá la función
 def get_ml_token():
-    with open("ml_token.json", "r") as f:
+    with open(TOKEN_PATH, "r") as f:
         data = json.load(f)
     return data["access_token"]
 

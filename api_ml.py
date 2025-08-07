@@ -359,24 +359,24 @@ def guardar_pedido_cache(
         print(f"💥 Error al guardar pedido {order_id}: {e}")
 
 
+# api_ml.py  — reemplazá la función completa
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
     try:
-        # Obtener datos del pedido
         shipment_id = (
-            pedido.get("shipping", {}).get("id") or
-            pedido.get("shipping", {}).get("shipment_id") or
-            pedido.get("shipment", {}).get("id")
+            pedido.get("shipping", {}).get("id")
+            or pedido.get("shipping", {}).get("shipment_id")
+            or pedido.get("shipment", {}).get("id")
         )
 
-        # Si no lo encontramos en el JSON original, lo buscamos con fallback
         if not shipment_id:
-            # Último intento: usar la API si hay token
             token = get_valid_token()
-            url = f"https://api.mercadolibre.com/orders/{order_id}"
-            headers = {"Authorization": f"Bearer {token}"}
-            r = requests.get(url, headers=headers)
-            if r.ok:
-                shipment_id = r.json().get("shipping", {}).get("id")
+            if token:
+                r = requests.get(
+                    f"{API_BASE}/orders/{order_id}",
+                    headers={"Authorization": f"Bearer {token}"}, timeout=6
+                )
+                if r.ok:
+                    shipment_id = r.json().get("shipping", {}).get("id")
 
         if not shipment_id:
             print(f"⚠️ Pedido {order_id} no tiene shipment_id. No se guarda en cache.")
@@ -384,34 +384,30 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
 
         shipment_id = str(shipment_id)
 
-        cliente = pedido.get("buyer", {}).get("nickname", "")
-        estado_ml = pedido.get("status", "unknown")
-        estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
+        # ✅ NORMALIZAR SIEMPRE
+        parsed = parse_order_data(pedido, shipment_id=shipment_id)
+        items  = parsed.get("items", [])
+        cliente = parsed.get("cliente", "")
 
-        # Parsear ítems
-        items = pedido.get("order_items", [])
-        if not items:
-            items = pedido.get("items", [])
-
-        # Enriquecer
+        # ✅ ENRIQUECER SOBRE LA FORMA NORMALIZADA
         token = get_valid_token()
-        if items:
+        if items and token:
             await enriquecer_permalinks(items, token, db)
             await enriquecer_items_ws(items, db)
-        else:
+        elif not items:
             print(f"⚠️ Pedido {order_id} no tiene ítems para enriquecer.")
 
-        # Guardar
+        # ✅ GUARDAR LA FORMA NORMALIZADA
         guardar_pedido_cache(
             db=db,
             shipment_id=shipment_id,
             order_id=order_id,
             cliente=cliente,
-            estado_envio=estado_envio,
-            estado_ml=estado_ml,
+            estado_envio=pedido.get("shipping", {}).get("status", "sin_envio"),
+            estado_ml=pedido.get("status", "unknown"),
             detalle=items
         )
-        print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
+        print(f"✅ Pedido {order_id} enriquecido y guardado en caché (parseado).")
     except Exception as e:
         print(f"❌ Error al guardar pedido {order_id}: {e}")
 
