@@ -7,10 +7,8 @@
     <div class="card-body">
       <h2 class="card-title">🔐 Recuperar Contraseña</h2>
 
-      <form action="/recuperar" method="post">
-        {# Si tenés CSRF habilitado, descomenta: #}
-         <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf') }}"> 
-
+<form action="/register" method="post">
+  <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf') }}">
         <div class="form-group">
           <label for="username">Usuario:</label>
           <input type="text" id="username" name="username" placeholder="Tu nombre de usuario" required>
