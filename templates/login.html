@@ -8,7 +8,9 @@
       <h2 class="card-title">🔑 Iniciar Sesión</h2>
 
   <form action="/login" method="post">
-    <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf') }}">          <label for="username">Usuario:</label>
+    <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf') }}">  
+    <div class="form-group password-wrapper"></div>        
+    <label for="username">Usuario:</label>
           <input type="text" id="username" name="username" placeholder="Ingresa tu usuario" required>
         </div>
 
