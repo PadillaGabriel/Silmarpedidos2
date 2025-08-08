@@ -361,47 +361,39 @@ def guardar_pedido_cache(
 
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
     try:
-        # Obtener datos del pedido
+        # 1) Resolver shipment_id
         shipment_id = (
-            pedido.get("shipping", {}).get("id") or
-            pedido.get("shipping", {}).get("shipment_id") or
-            pedido.get("shipment", {}).get("id")
+            pedido.get("shipping", {}).get("id")
+            or pedido.get("shipping", {}).get("shipment_id")
+            or pedido.get("shipment", {}).get("id")
         )
-
-        # Si no lo encontramos en el JSON original, lo buscamos con fallback
         if not shipment_id:
-            # Último intento: usar la API si hay token
             token = get_valid_token()
-            url = f"https://api.mercadolibre.com/orders/{order_id}"
-            headers = {"Authorization": f"Bearer {token}"}
-            r = requests.get(url, headers=headers)
+            r = requests.get(f"https://api.mercadolibre.com/orders/{order_id}",
+                             headers={"Authorization": f"Bearer {token}"})
             if r.ok:
                 shipment_id = r.json().get("shipping", {}).get("id")
-
         if not shipment_id:
             print(f"⚠️ Pedido {order_id} no tiene shipment_id. No se guarda en cache.")
             return
-
         shipment_id = str(shipment_id)
 
-        cliente = pedido.get("buyer", {}).get("nickname", "")
-        estado_ml = pedido.get("status", "unknown")
+        # 2) Normalizar ítems (lo que espera el front)
+        parsed = parse_order_data(pedido, shipment_id=shipment_id)
+        items = parsed.get("items", [])
+        cliente = parsed.get("cliente", "")
+
+        # 3) Estados
         estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
+        estado_ml = pedido.get("status", "unknown")  # o mantené este si lo usás en reportes
 
-        # Parsear ítems
-        items = pedido.get("order_items", [])
-        if not items:
-            items = pedido.get("items", [])
-
-        # Enriquecer
+        # 4) Enriquecer (permalinks + WS) sobre la lista **normalizada**
         token = get_valid_token()
         if items:
             await enriquecer_permalinks(items, token, db)
             await enriquecer_items_ws(items, db)
-        else:
-            print(f"⚠️ Pedido {order_id} no tiene ítems para enriquecer.")
 
-        # Guardar
+        # 5) Guardar NORMALIZADO en cache
         guardar_pedido_cache(
             db=db,
             shipment_id=shipment_id,
@@ -409,7 +401,7 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
             cliente=cliente,
             estado_envio=estado_envio,
             estado_ml=estado_ml,
-            detalle=items
+            detalle=items,  # 👈 ahora es list[dict] con titulo/sku/variante/imagenes
         )
         print(f"✅ Pedido {order_id} enriquecido y guardado en caché.")
     except Exception as e:

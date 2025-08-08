@@ -76,6 +76,10 @@ router = APIRouter()
 
 TTL_MIN = 10
 
+def _esta_enriquecido(detalle):
+    return isinstance(detalle, list) and detalle and isinstance(detalle[0], dict) and "titulo" in detalle[0]
+
+
 def _enriquecer_bg(shipment_id: str):
     from database.connection import SessionLocal
     from database.models import MLPedidoCache
@@ -382,6 +386,7 @@ async def escanear_post(
             return JSONResponse(status_code=400, content={"success": False, "error": "Falta order_id o shipment_id"})
 
 # 1) Si tengo shipment_id, intento Cache FIRST (multi-orden)
+# 1) Si tengo shipment_id, intento Cache FIRST (multi-orden)
         if shipment_id:
             recs = (
                 db.query(MLPedidoCache)
@@ -390,46 +395,43 @@ async def escanear_post(
             )
 
             if recs:
-                # tomar el más reciente sin ordenar en SQL (por si no tenés índices/columnas extra)
-                reciente = max(recs, key=lambda r: r.fecha_consulta or datetime.min.replace(tzinfo=timezone.utc))
+                # ¿Hay alguna fila ya enriquecida?
+                recs_enriquecidos = [r for r in recs if _esta_enriquecido(getattr(r, "detalle", None))]
 
-                # merge de info de TODAS las filas con ese shipment (multi-orden)
+                if not recs_enriquecidos:
+                    # 👉 Primer hit: no hay cache útil → enriquecer SINCRÓNICO
+                    detalle = await get_order_details(shipment_id=shipment_id, db=db)
+                    return {"success": True, "detalle": detalle}
+
+                # Hay al menos una fila con detalle OK → mergear
                 items, order_ids = [], []
                 cliente = ""
                 estado_envio = ""
                 estado_ml = ""
 
-                for r in recs:
+                for r in recs_enriquecidos:
                     if r.order_id: order_ids.append(r.order_id)
-                    if not cliente and getattr(r, "cliente", None): cliente = r.cliente
-                    if not estado_envio and getattr(r, "estado_envio", None): estado_envio = r.estado_envio
-                    if not estado_ml and getattr(r, "estado_ml", None): estado_ml = r.estado_ml
-                    if getattr(r, "detalle", None):
-                        try:
-                            items.extend(r.detalle)  # si 'detalle' ya es JSON/List
-                        except Exception:
-                            pass
+                    cliente = cliente or (r.cliente or "")
+                    estado_envio = estado_envio or (r.estado_envio or "")
+                    estado_ml = estado_ml or (r.estado_ml or "")
+                    items.extend(r.detalle)
 
-                order_ids = list(dict.fromkeys(order_ids))  # únicos
+                order_ids = list(dict.fromkeys(order_ids))
 
                 detalle = {
                     "primer_shipment_id": shipment_id,
-                    "order_ids": order_ids,           # 👈 todas las órdenes del envío
+                    "order_ids": order_ids,
                     "cliente": cliente,
-                    "estado_envio": estado_envio,
-                    "estado_ml": estado_ml,
-                    "items": items or []
+                    "estado_envio": estado_envio or "sin_envio",
+                    "estado_ml": estado_ml or "unknown",
+                    "items": items
                 }
 
-                # TTL de cache opcional
-                ahora = datetime.now(timezone.utc)
-                fresca = reciente.fecha_consulta and (ahora - reciente.fecha_consulta) < timedelta(minutes=TTL_MIN)
-
+                # Refrescar en background (no bloquea)
                 if background:
                     background.add_task(_enriquecer_bg, shipment_id)
 
-                return {"success": True, "detalle": detalle, **({} if fresca else {"incomplete": True})}
-
+                return {"success": True, "detalle": detalle}
         # 2) No hay cache útil → usa flujo consolidado (resolverá shipment si entra solo order)
         detalle = await get_order_details(order_id=order_id, shipment_id=shipment_id, db=db)
 
