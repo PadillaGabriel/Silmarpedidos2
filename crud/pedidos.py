@@ -4,7 +4,7 @@ import logging
 
 import aiohttp  # Usado para enriquecer permalinks
 from sqlalchemy.orm import Session
-
+from sqlalchemy import or_, false
 from database.connection import SessionLocal
 from database.models import Pedido, WsItem, MLPedidoCache, MLItem  # ✅ agregué MLItem si usás fetch_item_permalink
 from ws.items import buscar_item_por_sku, parsear_items,obtener_todos_los_items
@@ -36,17 +36,54 @@ def add_order_if_not_exists(detalle):
     session.commit()
     session.close()
 
-def marcar_envio_armado(shipment_id, usuario):
-    session = SessionLocal()
-    ahora = datetime.now()
-    filas = session.query(Pedido).filter_by(shipment_id=shipment_id, estado="pendiente").update({
+def marcar_envio_armado(db: Session, shipment_id: str, usuario: str) -> int:
+    ahora = datetime.now(timezone.utc)
+
+    # 1) Traer todos los order_id asociados a ese shipment desde la cache
+    oids = [r[0] for r in (
+        db.query(MLPedidoCache.order_id)
+          .filter(MLPedidoCache.shipment_id == str(shipment_id))
+          .distinct()
+          .all()
+    ) if r[0]]
+
+    # 2) Actualizar cualquier estado que no sea final (no limitar a "pendiente")
+    q = (db.query(Pedido)
+           .filter(
+               or_(
+                   Pedido.shipment_id == str(shipment_id),
+                   (Pedido.order_id.in_(oids) if oids else false())
+               )
+           )
+           .filter(~Pedido.estado.in_(["despachado", "cancelado"]))
+        )
+
+    afectados = q.update({
         Pedido.estado: "armado",
-        Pedido.fecha_armado: ahora,
-        Pedido.usuario_armado: usuario
-    })
-    session.commit()
-    session.close()
-    return filas > 0
+        getattr(Pedido, "fecha_armado", Pedido.estado): ahora,       # usa columna si existe
+        getattr(Pedido, "usuario_armado", Pedido.estado): usuario,   # idem
+        getattr(Pedido, "updated_at", Pedido.estado): ahora          # opcional
+    }, synchronize_session=False)
+
+    db.commit()
+
+    # 3) (Opcional) Alta mínima si no había filas en 'pedidos'
+    if afectados == 0 and oids:
+        for oid in oids:
+            if not db.query(Pedido).filter(Pedido.order_id == oid,
+                                           Pedido.shipment_id == str(shipment_id)).first():
+                db.add(Pedido(
+                    order_id=oid,
+                    shipment_id=str(shipment_id),
+                    estado="armado",
+                    **({"fecha_armado": ahora} if hasattr(Pedido, "fecha_armado") else {}),
+                    **({"usuario_armado": usuario} if hasattr(Pedido, "usuario_armado") else {}),
+                    **({"updated_at": ahora} if hasattr(Pedido, "updated_at") else {}),
+                ))
+        db.commit()
+        afectados = len(oids)
+
+    return afectados
 
 def marcar_pedido_despachado(db: Session, shipment_id, logistica, tipo_envio, usuario):
     ahora = datetime.now()
