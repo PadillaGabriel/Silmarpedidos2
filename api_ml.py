@@ -216,6 +216,8 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
             parsed = parse_order_data(od)
             parsed["primer_order_id"] = order_id
             parsed["shipment_id"] = shipment_id
+            parsed["estado_ml"] = shipment_status
+            parsed["estado_envio"] = estado_envio
             return parsed
         except Exception as e:
             logger.warning("Error consultando o procesando la orden %s: %s", order_id, e)
@@ -386,10 +388,23 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
         cliente = parsed.get("cliente", "")
 
         # 3) Estados
-        estado_envio = pedido.get("shipping", {}).get("status", "sin_envio")
-        estado_ml = pedido.get("status", "unknown")  # o mantené este si lo usás en reportes
+        estado_raw = None
+        try:
+            s = fetch_api(f"/shipments/{shipment_id}")   # si falla, caemos al de la orden
+            estado_raw = s.get("status")
+        except Exception:
+            pass
+        if not estado_raw:
+            estado_raw = pedido.get("shipping", {}).get("status", "unknown")
 
-        # 4) Enriquecer (permalinks + WS) sobre la lista **normalizada**
+        estado_traducido = {
+            "pending": "Pendiente", "ready_to_ship": "Listo para armar", "handling": "En preparación",
+            "shipped": "Enviado", "delivered": "Entregado", "not_delivered": "No entregado",
+            "cancelled": "Cancelado", "returned": "Devuelto"
+        }
+        estado_envio = estado_traducido.get(estado_raw, estado_raw.replace("_", " ").capitalize())
+        estado_ml = estado_raw
+                # 4) Enriquecer (permalinks + WS) sobre la lista **normalizada**
         token = get_valid_token()
         if items:
             await enriquecer_permalinks(items, token, db)
