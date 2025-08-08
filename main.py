@@ -497,32 +497,53 @@ async def armar_post(
     db: Session = Depends(get_db)
 ):
     usuario = current_user["username"]
-    id_buscar = shipment_id or order_id
-    if not id_buscar:
-        return {"success": False, "error": "Falta ID"}
 
-    # Verificar estado del envío en Mercado Libre
-    token = os.getenv("ML_ACCESS_TOKEN")
-    if token:
+    try:
+        # 0) Normalizar: siempre trabajar con SHIPMENT_ID
+        sid = (shipment_id or "").strip()
+        if not sid and order_id:
+            # 0.a) primero intentamos desde la cache local
+            rec = db.query(MLPedidoCache).filter(MLPedidoCache.order_id == order_id).first()
+            if rec and rec.shipment_id:
+                sid = str(rec.shipment_id)
+
+            # 0.b) si no está en cache, lo resolvemos en ML
+            if not sid:
+                token = os.getenv("ML_ACCESS_TOKEN")
+                if not token:
+                    token = get_ml_token()
+                url = f"https://api.mercadolibre.com/orders/{order_id}"
+                r = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=12)
+                if r.ok:
+                    sid = str(r.json().get("shipping", {}).get("id") or "")
+        if not sid:
+            return JSONResponse(status_code=400, content={"success": False, "error": "No se pudo determinar el shipment_id."})
+
+        # 1) Guardrail: si el envío está cancelado, no permitir armar
         try:
-            url = f"https://api.mercadolibre.com/shipments/{id_buscar}"
-            headers = {"Authorization": f"Bearer {token}"}
-            r = requests.get(url, headers=headers)
-            if r.ok and r.json().get("status") == "cancelled":
-                return {"success": False, "error": "El pedido fue cancelado. No se puede armar."}
+            token = os.getenv("ML_ACCESS_TOKEN") or get_ml_token()
+            rs = requests.get(f"https://api.mercadolibre.com/shipments/{sid}",
+                              headers={"Authorization": f"Bearer {token}"}, timeout=10)
+            if rs.ok and rs.json().get("status") == "cancelled":
+                return JSONResponse(status_code=409, content={"success": False, "error": "El envío está cancelado (ML)."})
         except Exception as e:
-            return {"success": False, "error": f"Error consultando estado del envío: {e}"}
+            # no bloqueamos por fallo de red
+            print(f"⚠️ No se pudo validar estado ML para {sid}: {e}")
 
-    # Verificar estado actual interno (local en la DB)
-    estado_actual = get_estado_envio(id_buscar)
-    if estado_actual == "armado":
-        return {"success": False, "error": "Este pedido ya fue armado anteriormente."}
-    if estado_actual == "despachado":
-        return {"success": False, "error": "Este pedido ya fue despachado. No se puede volver a armar."}
+        # 2) Estado local
+        estado_local = get_estado_envio(sid)
+        if estado_local == "armado":
+            return {"success": False, "error": "Este pedido ya fue armado."}
+        if estado_local == "despachado":
+            return {"success": False, "error": "Este pedido ya fue despachado."}
 
-    # Marcar como armado
-    ok = marcar_envio_armado(id_buscar, usuario)
-    return {"success": ok, "error": None if ok else "No se pudo marcar como armado"}
+        # 3) Marcar como ARMADO (por shipment)
+        ok = marcar_envio_armado(sid, usuario)
+        return {"success": bool(ok), "mensaje": "Armado OK", "shipment_id": sid}
+
+    except Exception as e:
+        print(f"❌ /armar error inesperado: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": "Error interno al armar"})
     
 @app.get("/estado_envio", response_class=JSONResponse)
 def estado_envio(shipment_id: str, current_user: dict = Depends(get_current_user)):
