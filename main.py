@@ -254,8 +254,9 @@ async def configuracion_post(
 
 @app.get("/recuperar", response_class=HTMLResponse)
 async def recuperar_get(request: Request):
+    if "csrf" not in request.session:
+        request.session["csrf"] = secrets.token_urlsafe(32)
     return templates.TemplateResponse("recuperar.html", {"request": request})
-
 
 @app.post("/recuperar")
 async def recuperar_post(
