@@ -538,8 +538,9 @@ async def armar_post(
             return {"success": False, "error": "Este pedido ya fue despachado."}
 
         # 3) Marcar como ARMADO (por shipment)
-        ok = marcar_envio_armado(sid, usuario)
-        return {"success": bool(ok), "mensaje": "Armado OK", "shipment_id": sid}
+        afectados = marcar_envio_armado(db, sid, usuario)   # ← pasa db
+        ok = afectados > 0
+        return {"success": ok, "mensaje": "Armado OK", "shipment_id": sid, "afectados": afectados}
 
     except Exception as e:
         print(f"❌ /armar error inesperado: {e}")
