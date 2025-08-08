@@ -3,87 +3,81 @@
 
 {% block content %}
 <section class="auth-section">
-    <div class="card">
-        <div class="card-body">
-            <h2 class="card-title">🔐 Recuperar Contraseña</h2>
+  <div class="card">
+    <div class="card-body">
+      <h2 class="card-title">🔐 Recuperar Contraseña</h2>
 
-            <form method="post">
-                <div class="form-group">
-                    <label for="username">Usuario:</label>
-                    <input type="text" id="username" name="username" placeholder="Tu nombre de usuario" required>
-                </div>
+      <form action="/recuperar" method="post">
+        {# Si tenés CSRF habilitado, descomenta: #}
+        {# <input type="hidden" name="csrf_token" value="{{ request.session.get('csrf') }}"> #}
 
-                <div class="form-group password-wrapper">
-                    <label for="clave_maestra">Clave maestra:</label>
-                    <input type="password" id="clave_maestra" name="clave_maestra" class="password-input"
-                        placeholder="Clave maestra" required>
-                    <button type="button" class="toggle-password" aria-label="Mostrar u ocultar clave maestra">
-                        <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                            fill="currentColor" viewBox="0 0 24 24">
-                            <path
-                                d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-                        </svg>
-                    </button>
-                </div>
-
-                <div class="form-group password-wrapper">
-                    <label for="password">Nueva contraseña:</label>
-                    <input type="password" id="password" name="password" class="password-input"
-                        placeholder="Crea tu nueva contraseña" required>
-                    <button type="button" class="toggle-password" aria-label="Mostrar u ocultar contraseña">
-                        <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                            fill="currentColor" viewBox="0 0 24 24">
-                            <path
-                                d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-                        </svg>
-                    </button>
-                </div>
-
-
-                <button type="submit" class="btn btn-primary">Recuperar</button>
-            </form>
-
-            <a href="/login" class="register-link">Volver al inicio de sesión</a>
+        <div class="form-group">
+          <label for="username">Usuario:</label>
+          <input type="text" id="username" name="username" placeholder="Tu nombre de usuario" required>
         </div>
+
+        <div class="form-group password-wrapper">
+          <label for="clave_maestra">Clave maestra:</label>
+          <input type="password" id="clave_maestra" name="clave_maestra"
+                 class="password-input" placeholder="Clave maestra" required>
+          <button type="button" class="toggle-password" aria-label="Mostrar u ocultar clave maestra">
+            <!-- icono -->
+            <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="form-group password-wrapper">
+          <label for="nueva_password">Nueva contraseña:</label>
+          <!-- 🔧 antes era name="password" -->
+          <input type="password" id="nueva_password" name="nueva_password"
+                 class="password-input" placeholder="Crea tu nueva contraseña"
+                 minlength="8" autocomplete="new-password" required>
+          <button type="button" class="toggle-password" aria-label="Mostrar u ocultar contraseña">
+            <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
+            </svg>
+          </button>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Recuperar</button>
+      </form>
+
+      <a href="/login" class="register-link">Volver al inicio de sesión</a>
     </div>
+  </div>
 </section>
 {% endblock %}
 
 {% block scripts %}
 {% if request.session.get("error") %}
 <script>
-    window.addEventListener("DOMContentLoaded", function () {
-        const toastBody = document.getElementById("toast-body");
-        const toast = document.getElementById("toast-alert");
-
-        toastBody.innerText = "{{ request.session.get('error') }}";
-        toast.classList.add("show");
-
-        document.getElementById("toast-close-btn").onclick = function () {
-            toast.classList.remove("show");
-            fetch("/clear_error", { method: "POST" });
-        };
-    });
+  window.addEventListener("DOMContentLoaded", function () {
+    const toastBody = document.getElementById("toast-body");
+    const toast = document.getElementById("toast-alert");
+    toastBody.innerText = "{{ request.session.get('error') }}";
+    toast.classList.add("show");
+    document.getElementById("toast-close-btn").onclick = function () {
+      toast.classList.remove("show");
+      fetch("/clear_error", { method: "POST" });
+    };
+  });
 </script>
 {% endif %}
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        const eyeIcon = `<svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/>
-    </svg>`;
-        const eyeOffIcon = `<svg class="icon-eye-off" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M12 6a9.77 9.77 0 0 1 8.94 6 9.77 9.77 0 0 1-8.94 6 9.77 9.77 0 0 1-8.94-6A9.77 9.77 0 0 1 12 6zm0-1.5C6.58 4.5 2.05 8.28.38 12c1.67 3.72 6.2 7.5 11.62 7.5s9.95-3.78 11.62-7.5C21.95 8.28 17.42 4.5 12 4.5zm0 6.75a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
-    </svg>`;
-
-        document.querySelectorAll(".toggle-password").forEach((btn) => {
-            btn.addEventListener("click", function () {
-                const input = this.closest(".password-wrapper").querySelector(".password-input");
-                const isHidden = input.type === "password";
-                input.type = isHidden ? "text" : "password";
-                this.innerHTML = isHidden ? eyeOffIcon : eyeIcon;
-            });
-        });
+  document.addEventListener("DOMContentLoaded", function () {
+    const eyeIcon = `<svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 8.11 1 12c1.73 3.89 6 7.5 11 7.5s9.27-3.61 11-7.5c-1.73-3.89-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-1.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`;
+    const eyeOffIcon = `<svg class="icon-eye-off" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 6a9.77 9.77 0 0 1 8.94 6 9.77 9.77 0 0 1-8.94 6 9.77 9.77 0 0 1-8.94-6A9.77 9.77 0 0 1 12 6zm0-1.5C6.58 4.5 2.05 8.28.38 12c1.67 3.72 6.2 7.5 11.62 7.5s9.95-3.78 11.62-7.5C21.95 8.28 17.42 4.5 12 4.5zm0 6.75a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>`;
+    document.querySelectorAll(".toggle-password").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const input = this.closest(".password-wrapper").querySelector(".password-input");
+        const isHidden = input.type === "password";
+        input.type = isHidden ? "text" : "password";
+        this.innerHTML = isHidden ? eyeOffIcon : eyeIcon;
+      });
     });
+  });
 </script>
 {% endblock %}

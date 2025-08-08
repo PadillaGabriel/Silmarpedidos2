@@ -6,12 +6,14 @@ import logging
 import asyncio
 import requests
 import httpx
+import secrets
 from fastapi import BackgroundTasks
 from io import StringIO
 from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone, time
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
+from passlib.hash import bcrypt
 
 from fastapi import (
     FastAPI, Request, Form, Depends, HTTPException, status, Query, File, UploadFile, APIRouter
@@ -26,6 +28,8 @@ from passlib.hash import bcrypt
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, or_
+from passlib.hash import bcrypt
+import os
 
 
 # Inicialización DB
@@ -60,16 +64,23 @@ from api_ml import fetch_api, get_order_details,parse_order_data, guardar_pedido
 from webhooks import webhooks  # 👈 importa el router desde webhooks.py
 from database.connection import get_db
 
-
-
-
+PEPPER = os.getenv("PASS_PEPPER", "")
+MASTER_KEY = os.getenv("MASTER_RESET_KEY", "silmarreset2024")
 
 logger = logging.getLogger("uvicorn.error")
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
+PROD = os.getenv("ENV", "prod") == "prod"  # o la condición que uses
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SECRET_KEY"),
+    same_site="lax",           # evita CSRF entre sitios
+    https_only=PROD,           # Secure + HttpOnly en prod
+    max_age=60*60*12           # 12h de sesión
+)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 app.include_router(webhooks, prefix="/webhooks")
+PEPPER = os.getenv("PASS_PEPPER", "")   
 
 db = SessionLocal()
 router = APIRouter()
@@ -135,30 +146,82 @@ async def home(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
+    if "csrf" not in request.session:
+        request.session["csrf"] = secrets.token_urlsafe(32)
     return templates.TemplateResponse("register.html", {"request": request})
 
 @app.post("/register")
-async def register_post(request: Request, username: str = Form(...), password: str = Form(...)):
-    if get_user_by_username(username):
+async def register_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    csrf_token: str = Form(...)
+):
+    # CSRF
+    if csrf_token != request.session.get("csrf"):
+        request.session["error"] = "Sesión expirada. Volvé a intentar."
+        return RedirectResponse("/register", status_code=302)
+
+    u = username.strip().lower()  # normalizar usuario (case-insensitive)
+
+    if get_user_by_username(u):
         request.session["error"] = "El usuario ya existe"
         return RedirectResponse("/register", status_code=302)
 
-    create_user(username, bcrypt.hash(password))
-    request.session["username"] = username
+    if len(password) < 8:
+        request.session["error"] = "La contraseña debe tener al menos 8 caracteres"
+        return RedirectResponse("/register", status_code=302)
+
+    # Hash con pepper
+    create_user(u, bcrypt.hash(PEPPER + password))
+
+    request.session["username"] = u
     return RedirectResponse("/configuracion", status_code=302)
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_get(request: Request):
+    if "csrf" not in request.session:
+        request.session["csrf"] = secrets.token_urlsafe(32)
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
-    user = get_user_by_username(username)
-    if not user or not bcrypt.verify(password, user.hashed_password):
+async def login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    csrf_token: str = Form(...)
+):
+    # CSRF
+    if csrf_token != request.session.get("csrf"):
+        request.session["error"] = "Sesión expirada. Volvé a intentar."
+        return RedirectResponse("/login", status_code=302)
+
+    # Throttling simple por sesión
+    meta = request.session.get("login_meta") or {"failures": 0, "until": None}
+    now = datetime.now(timezone.utc)
+    if meta.get("until"):
+        try:
+            until = datetime.fromisoformat(meta["until"])
+        except Exception:
+            until = None
+        if until and now < until:
+            request.session["error"] = "Demasiados intentos. Probá en 2 minutos."
+            return RedirectResponse("/login", status_code=302)
+
+    u = username.strip().lower()
+    user = get_user_by_username(u)
+
+    if (not user) or (not bcrypt.verify(PEPPER + password, user.hashed_password)):
+        meta["failures"] = meta.get("failures", 0) + 1
+        if meta["failures"] >= 5:
+            meta["until"] = (now + timedelta(minutes=2)).isoformat()
+        request.session["login_meta"] = meta
         request.session["error"] = "Credenciales inválidas"
         return RedirectResponse("/login", status_code=302)
 
-    request.session["username"] = username
+    # OK → resetear contador y loguear
+    request.session["login_meta"] = {"failures": 0, "until": None}
+    request.session["username"] = u
     return RedirectResponse("/configuracion", status_code=302)
 
 @app.post("/clear_error")
@@ -193,29 +256,58 @@ async def configuracion_post(
 async def recuperar_get(request: Request):
     return templates.TemplateResponse("recuperar.html", {"request": request})
 
+
 @app.post("/recuperar")
 async def recuperar_post(
     request: Request,
     username: str = Form(...),
     clave_maestra: str = Form(...),
-    nueva_password: str = Form(...)
+    nueva_password: str = Form(...),
+    confirmar: str = Form(""),
+    csrf_token: str = Form(None)
 ):
-    if clave_maestra != "silmarreset2024":
+    # CSRF básico (si ya lo pusiste en login/registro)
+    if csrf_token and csrf_token != request.session.get("csrf"):
+        request.session["error"] = "Sesión expirada. Volvé a intentar."
+        return RedirectResponse("/recuperar", status_code=302)
+
+    if clave_maestra != MASTER_KEY:
         request.session["error"] = "Clave maestra incorrecta"
         return RedirectResponse("/recuperar", status_code=302)
 
-    user = get_user_by_username(username)
+    # Normalizar usuario y validar password
+    u = (username or "").strip().lower()
+    if not u:
+        request.session["error"] = "Usuario requerido"
+        return RedirectResponse("/recuperar", status_code=302)
+    if len(nueva_password or "") < 8:
+        request.session["error"] = "La contraseña debe tener al menos 8 caracteres"
+        return RedirectResponse("/recuperar", status_code=302)
+    if confirmar and confirmar != nueva_password:
+        request.session["error"] = "Las contraseñas no coinciden"
+        return RedirectResponse("/recuperar", status_code=302)
+
+    user = get_user_by_username(u)
     if not user:
         request.session["error"] = "Usuario no encontrado"
         return RedirectResponse("/recuperar", status_code=302)
 
-    user.hashed_password = bcrypt.hash(nueva_password)
+    # Guardar nueva contraseña (con pepper)
+    user.hashed_password = bcrypt.hash(PEPPER + nueva_password)
     db = SessionLocal()
-    db.add(user)
-    db.commit()
-    db.close()
+    try:
+        db.merge(user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        request.session["error"] = "No se pudo actualizar la contraseña"
+        return RedirectResponse("/recuperar", status_code=302)
+    finally:
+        db.close()
 
-    request.session["username"] = username
+    # Login directo tras reset
+    request.session["username"] = u
+    request.session.pop("login_meta", None)
     return RedirectResponse("/configuracion", status_code=302)
 
 @app.get("/historial/exportar")
