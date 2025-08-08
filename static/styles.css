@@ -1524,4 +1524,109 @@ ul.config-list li {
   margin-top: 0.5rem;
   appearance: none;
 }
-  
+/* ========= Auth polish (solo login/register/recuperar) ========= */
+:root{
+  --auth-bg1:#f7fbff;
+  --auth-bg2:#eef3f8;
+  --auth-brand:#0b2a3a;      /* azul oscuro */
+  --auth-brand-2:#0f3348;    /* hover */
+  --auth-accent:#2bb3ff;     /* foco */
+}
+
+/* Fondo y centrado del contenedor principal */
+main:has(form[action="/login"]),
+main:has(form[action="/register"]),
+main:has(form[action="/recuperar"]),
+section.auth-section {
+  min-height: calc(100vh - 120px);
+  display:flex; align-items:center; justify-content:center;
+  padding:2rem 1rem;
+  background: linear-gradient(180deg, var(--auth-bg1) 0%, var(--auth-bg2) 100%);
+}
+
+/* La tarjeta del auth, sin tocar otras cards del sitio */
+.card:has(form[action="/login"]),
+.card:has(form[action="/register"]),
+.card:has(form[action="/recuperar"]),
+.auth-section .card {
+  width:100%; max-width: 440px;
+  border:0;
+  border-radius: 20px;
+  box-shadow: 0 12px 28px rgba(16,46,68,.12);
+  overflow:hidden;
+}
+
+/* Título dentro de la card (no rompe otros) */
+.card:has(form[action="/login"]) .card-title,
+.card:has(form[action="/register"]) .card-title,
+.card:has(form[action="/recuperar"]) .card-title,
+.auth-section .card-title {
+  font-weight: 800;
+  color: var(--auth-brand);
+  display: flex; gap: .5rem; align-items: center;
+}
+
+/* Inputs: look moderno */
+form[action="/login"] .form-group label,
+form[action="/register"] .form-group label,
+form[action="/recuperar"] .form-group label,
+.auth-section .form-group label {
+  font-weight: 600;
+  color: #1c2b36;
+}
+
+form[action="/login"] input,
+form[action="/register"] input,
+form[action="/recuperar"] input,
+.auth-section input {
+  padding: .9rem .95rem;
+  border-radius: 14px;
+  border: 1px solid #d6e1ea;
+  background: #f3f8ff;
+}
+
+form[action="/login"] input:focus,
+form[action="/register"] input:focus,
+form[action="/recuperar"] input:focus,
+.auth-section input:focus {
+  border-color: var(--auth-accent);
+  box-shadow: 0 0 0 .2rem rgba(43,179,255,.15);
+  background: #fff;
+}
+
+/* Ojo de la contraseña (usa tus clases actuales) */
+.password-wrapper { position: relative; }
+.toggle-password {
+  position:absolute; right:.65rem; top:50%; transform:translateY(-50%);
+  border:0; background:transparent; padding:.25rem; cursor:pointer;
+  line-height: 1; color:#27485d;
+}
+.toggle-password:focus { outline: 2px solid var(--auth-accent); border-radius: 8px; }
+.password-input { padding-right: 2.2rem; } /* espacio para el ojo */
+
+/* Botón primario SOLO en auth */
+form[action="/login"] .btn.btn-primary,
+form[action="/register"] .btn.btn-primary,
+form[action="/recuperar"] .btn.btn-primary,
+.auth-section .btn.btn-primary {
+  background: var(--auth-brand);
+  border: 0;
+  padding: .9rem 1.1rem;
+  border-radius: 14px;
+  font-weight: 700;
+}
+form[action="/login"] .btn.btn-primary:hover,
+form[action="/register"] .btn.btn-primary:hover,
+form[action="/recuperar"] .btn.btn-primary:hover,
+.auth-section .btn.btn-primary:hover {
+  background: var(--auth-brand-2);
+}
+
+/* Links secundarios centrados */
+form[action="/login"] + .register-link,
+form[action="/register"] + .register-link,
+form[action="/recuperar"] + .register-link,
+.auth-section .register-link {
+  display:block; text-align:center; margin-top:.9rem;
+  color: var(--auth-brand);
+}
