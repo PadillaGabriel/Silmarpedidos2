@@ -1630,3 +1630,22 @@ form[action="/recuperar"] + .register-link,
   display:block; text-align:center; margin-top:.9rem;
   color: var(--auth-brand);
 }
+
+/* Login: que #username tenga el mismo look/ancho que el de password */
+form[action="/login"] #username{
+  display:block;
+  width:100%;
+  box-sizing:border-box;
+
+  /* mismos estilos que el de abajo */
+  padding:.9rem .95rem;
+  border-radius:14px;
+  border:1px solid #d6e1ea;
+  background:#f3f8ff;
+}
+
+form[action="/login"] #username:focus{
+  border-color:var(--auth-accent, #2bb3ff);
+  box-shadow:0 0 0 .2rem rgba(43,179,255,.15);
+  background:#fff;
+}
