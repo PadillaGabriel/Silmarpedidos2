@@ -1,6 +1,6 @@
 # auth_ml.py
 import os, json, time, webbrowser, requests
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ===== CREDENCIALES (podés dejarlas acá o pasarlas por env) =====
@@ -11,6 +11,20 @@ REDIRECT_URI = os.getenv("ML_REDIRECT_URI", "https://controlpedidos.onrender.com
 # Ruta del token (por env) con fallback a la carpeta del proyecto
 ROOT = Path(os.getenv("ML_ROOT", Path(__file__).resolve()).parent)
 TOKEN_PATH = Path(os.getenv("ML_TOKEN_PATH", ROOT / "ml_token.json"))
+
+
+def _to_epoch(v):
+    if isinstance(v, (int, float)): return int(v)
+    if isinstance(v, str):
+        s = v.strip()
+        if s.isdigit(): return int(s)
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None: dt = dt.replace(tzinfo=timezone.utc)
+            return int(dt.timestamp())
+        except Exception:
+            return 0
+    return 0
 
 # ---------- Paso 1: pedir CODE ----------
 def solicitar_codigo():
@@ -45,8 +59,7 @@ def obtener_token(code: str):
     now = int(time.time())
     data["created_at"] = now
     # ML devuelve expires_in (segundos). Guardamos expires_at para refrescar a tiempo.
-    data["expires_at"] = now + int(data.get("expires_in", 0))
-
+    data["expires_at"] = _to_epoch(data.get("created_at")) + int(data.get("expires_in", 0))
     TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     TOKEN_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
