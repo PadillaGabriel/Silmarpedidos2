@@ -151,17 +151,13 @@ async def register_get(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 @app.post("/register")
-async def register_post(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    csrf_token: str = Form(...)
-):
-    # CSRF
+async def register_post(request: Request,
+                        username: str = Form(...),
+                        password: str = Form(...),
+                        csrf_token: str = Form(...)):
     if csrf_token != request.session.get("csrf"):
         request.session["error"] = "Sesión expirada. Volvé a intentar."
         return RedirectResponse("/register", status_code=302)
-
     u = username.strip().lower()  # normalizar usuario (case-insensitive)
 
     if get_user_by_username(u):
@@ -185,17 +181,13 @@ async def login_get(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-async def login_post(
-    request: Request,
-    username: str = Form(...),
-    password: str = Form(...),
-    csrf_token: str = Form(...)
-):
-    # CSRF
+async def login_post(request: Request,
+                     username: str = Form(...),
+                     password: str = Form(...),
+                     csrf_token: str = Form(...)):
     if csrf_token != request.session.get("csrf"):
         request.session["error"] = "Sesión expirada. Volvé a intentar."
         return RedirectResponse("/login", status_code=302)
-
     # Throttling simple por sesión
     meta = request.session.get("login_meta") or {"failures": 0, "until": None}
     now = datetime.now(timezone.utc)
