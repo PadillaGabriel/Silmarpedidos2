@@ -13,6 +13,10 @@ from ws.items import obtener_todos_los_items, parsear_items
 from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
 from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
+from auth_ml import get_ml_token
+
+headers = {"Authorization": f"Bearer {get_ml_token()}"}
+r = requests.get("https://api.mercadolibre.com/orders/200001234567890", headers=headers, timeout=20)
 
 
 
