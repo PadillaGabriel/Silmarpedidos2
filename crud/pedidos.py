@@ -1,8 +1,8 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 import logging
-
+import json
 import aiohttp  # Usado para enriquecer permalinks
+
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, false
 from database.connection import SessionLocal
@@ -11,6 +11,8 @@ from ws.items import buscar_item_por_sku, parsear_items,obtener_todos_los_items
 from ws.auth import autenticar_desde_json
 from sqlalchemy.orm import Session
 from database.models import WsItem
+from datetime import datetime, timezone
+
 
 
 
@@ -36,10 +38,42 @@ def add_order_if_not_exists(detalle):
     session.commit()
     session.close()
 
+
+def _extraer_minimos(cache_row):
+    """
+    Devuelve (titulo, cantidad, cliente) a partir de una fila de cache.
+    Soporta items como lista o JSON string.
+    """
+    # nombre de campos típicos en tu cache:
+    items = getattr(cache_row, "items", None) or getattr(cache_row, "detalle", None) \
+            or getattr(cache_row, "items_json", None)
+    if isinstance(items, str):
+        try:
+            items = json.loads(items)
+        except Exception:
+            items = []
+
+    items = items or []
+    titulo = (items[0].get("title") if items else None) \
+             or getattr(cache_row, "titulo", None)
+
+    cantidad = sum(int(i.get("quantity", 0)) for i in items) \
+               or getattr(cache_row, "cantidad", None)
+
+    cliente = getattr(cache_row, "buyer_nickname", None) \
+              or getattr(cache_row, "nickname", None) \
+              or (getattr(cache_row, "buyer", {}) or {}).get("nickname")
+
+    return titulo, cantidad, cliente
+
+def _set_if_has(obj, field, value):
+    if value is not None and hasattr(obj, field):
+        setattr(obj, field, value)
+
 def marcar_envio_armado(db: Session, shipment_id: str, usuario: str) -> int:
     ahora = datetime.now(timezone.utc)
 
-    # 1) Traer todos los order_id asociados a ese shipment desde la cache
+    # 1) order_ids asociados a ese shipment
     oids = [r[0] for r in (
         db.query(MLPedidoCache.order_id)
           .filter(MLPedidoCache.shipment_id == str(shipment_id))
@@ -47,7 +81,7 @@ def marcar_envio_armado(db: Session, shipment_id: str, usuario: str) -> int:
           .all()
     ) if r[0]]
 
-    # 2) Actualizar cualquier estado que no sea final (no limitar a "pendiente")
+    # 2) Marcar 'armado' todo lo relacionado (evita estados finales)
     q = (db.query(Pedido)
            .filter(
                or_(
@@ -60,26 +94,68 @@ def marcar_envio_armado(db: Session, shipment_id: str, usuario: str) -> int:
 
     afectados = q.update({
         Pedido.estado: "armado",
-        getattr(Pedido, "fecha_armado", Pedido.estado): ahora,       # usa columna si existe
-        getattr(Pedido, "usuario_armado", Pedido.estado): usuario,   # idem
-        getattr(Pedido, "updated_at", Pedido.estado): ahora          # opcional
+        getattr(Pedido, "fecha_armado", Pedido.estado): ahora,
+        getattr(Pedido, "usuario_armado", Pedido.estado): usuario,
+        getattr(Pedido, "updated_at", Pedido.estado): ahora
     }, synchronize_session=False)
+    db.commit()
+
+    # 3) Rellenar título / cliente / cantidad desde la cache
+    #    (sobre las filas que tocamos o vamos a crear)
+    filas = (db.query(Pedido)
+               .filter(
+                   or_(
+                       Pedido.shipment_id == str(shipment_id),
+                       (Pedido.order_id.in_(oids) if oids else false())
+                   )
+               ).all())
+
+    cache_rows = (db.query(MLPedidoCache)
+                    .filter(
+                        or_(
+                            MLPedidoCache.shipment_id == str(shipment_id),
+                            (MLPedidoCache.order_id.in_(oids) if oids else false())
+                        )
+                    ).all())
+    cache_by_oid = {c.order_id: c for c in cache_rows}
+
+    for p in filas:
+        c = cache_by_oid.get(p.order_id)
+        if not c:
+            continue
+        titulo, cantidad, cliente = _extraer_minimos(c)
+        _set_if_has(p, "titulo", titulo)
+        _set_if_has(p, "cantidad", cantidad)
+        # según tu modelo puede llamarse 'cliente' o 'nombre_cliente'
+        _set_if_has(p, "cliente", cliente)
+        _set_if_has(p, "nombre_cliente", cliente)
+        _set_if_has(p, "updated_at", ahora)
 
     db.commit()
 
-    # 3) (Opcional) Alta mínima si no había filas en 'pedidos'
+    # 4) Alta mínima si no había filas en 'pedidos'
     if afectados == 0 and oids:
         for oid in oids:
-            if not db.query(Pedido).filter(Pedido.order_id == oid,
-                                           Pedido.shipment_id == str(shipment_id)).first():
-                db.add(Pedido(
+            p = db.query(Pedido).filter(
+                Pedido.order_id == oid,
+                Pedido.shipment_id == str(shipment_id)
+            ).first()
+            if not p:
+                c = cache_by_oid.get(oid)
+                titulo, cantidad, cliente = _extraer_minimos(c) if c else (None, None, None)
+                p = Pedido(
                     order_id=oid,
                     shipment_id=str(shipment_id),
                     estado="armado",
                     **({"fecha_armado": ahora} if hasattr(Pedido, "fecha_armado") else {}),
                     **({"usuario_armado": usuario} if hasattr(Pedido, "usuario_armado") else {}),
                     **({"updated_at": ahora} if hasattr(Pedido, "updated_at") else {}),
-                ))
+                )
+                _set_if_has(p, "titulo", titulo)
+                _set_if_has(p, "cantidad", cantidad)
+                _set_if_has(p, "cliente", cliente)
+                _set_if_has(p, "nombre_cliente", cliente)
+                db.add(p)
         db.commit()
         afectados = len(oids)
 
