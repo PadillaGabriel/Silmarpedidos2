@@ -297,7 +297,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-manual").addEventListener("click", () => buscarManual());
 
-  // Submit despachar (anti doble click + JSON robusto)
+  // Submit despachar (loading en botón + recarga tras éxito)
   document.getElementById("despachar-form").addEventListener("submit", async e => {
     e.preventDefault();
 
@@ -311,7 +311,12 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     const submitBtn = e.target.querySelector('[type="submit"]');
+    const originalText = submitBtn.innerText;
+    let exito = false;
+
+    // Estado "Despachando..."
     submitBtn.disabled = true;
+    submitBtn.innerText = "Despachando…";
 
     const formData = new FormData(e.target);
 
@@ -333,14 +338,24 @@ window.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      exito = true;
       mostrarToastSuccess(data.mensaje || "Pedido despachado correctamente.");
+
+      // Igual que en Escanear: breve delay para que se vea el toast y recargar
+      setTimeout(() => window.location.reload(), 900);
     } catch (err) {
       console.error("❌ Error al conectar:", err);
       mostrarToastError("Error al conectar con el servidor.");
     } finally {
-      submitBtn.disabled = false;
+      // Si no hubo éxito, restauramos el botón
+      if (!exito) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalText;
+      
+      }
     }
   });
 });
 </script>
+
 {% endblock %}
