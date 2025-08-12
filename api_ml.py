@@ -14,7 +14,7 @@ from database.models import MLPedidoCache, WsItem, MLItem
 from datetime import datetime, timedelta, timezone
 from crud.pedidos import buscar_item_cache_por_sku, enriquecer_items_ws
 from auth_ml import get_ml_token
-
+from typing import List, Dict
 
 
 
@@ -310,6 +310,18 @@ async def get_order_details(order_id: str = None, shipment_id: str = None, db: S
     logger.error("No se encontró order ni shipment válido (order_id=%s, shipment_id=%s)", order_id, shipment_id)
     return {"cliente": "Error", "items": [], "primer_order_id": None}
 
+def _dedupe_items(items):
+    """Unifica items por (item_id, variation_id, sku) y suma cantidades."""
+    out = {}
+    for it in items or []:
+        key = (str(it.get("item_id") or ""),
+               str(it.get("variation_id") or ""),
+               str(it.get("sku") or ""))
+        if key in out:
+            out[key]["cantidad"] = (out[key].get("cantidad", 0) or 0) + (it.get("cantidad", 0) or 0)
+        else:
+            out[key] = dict(it)
+    return list(out.values())
 
 
 def guardar_pedido_cache(
@@ -319,41 +331,56 @@ def guardar_pedido_cache(
     cliente: str,
     estado_envio: str,
     estado_ml: str,
-    detalle: dict
+    detalle: dict   # acá te llega list[dict] (items)
 ):
     try:
-        # 🧠 Obtener logistic_type desde el envío directamente
+        # 🧠 logistic_type desde ML
         logistic_type = obtener_logistic_type_desde_envio(shipment_id)
 
-        # (Opcional) Asignarlo a cada ítem también
-        for item in detalle:
-            item["logistic_type"] = logistic_type
+        if not isinstance(detalle, list):
+            detalle = detalle.get("items", []) if isinstance(detalle, dict) else []
+        items = _dedupe_items(detalle)
 
-        cache = MLPedidoCache(
-            shipment_id=shipment_id,
-            order_id=order_id,
-            cliente=cliente,
-            estado_envio=estado_envio,
-            estado_ml=estado_ml,
-            detalle=detalle,
-            logistic_type=logistic_type
-        )
 
-        db.merge(cache)
+        # 🔒 Dedup + enrich por item (no mutamos el original)
+        items = _dedupe_items(detalle)
+        for it in items:
+            it["logistic_type"] = logistic_type
+
+        # ⬇️ Upsert por PK (order_id): REEMPLAZA el JSON completo
+        oid = str(order_id).strip()
+        row = db.get(MLPedidoCache, oid)
+        if row:
+            row.shipment_id   = str(shipment_id).strip()
+            row.cliente       = cliente
+            row.estado_envio  = estado_envio
+            row.estado_ml     = estado_ml
+            row.detalle       = items            # 👈 reemplaza, NO acumula
+            row.logistic_type = logistic_type
+        else:
+            cache = MLPedidoCache(
+                shipment_id=str(shipment_id).strip(),
+                order_id=oid,
+                cliente=cliente,
+                estado_envio=estado_envio,
+                estado_ml=estado_ml,
+                detalle=items,                   # 👈 ya deduplicado
+                logistic_type=logistic_type
+            )
+            db.add(cache)
+
         db.commit()
 
         print(f"💾 Pedido {order_id} commit a la base de datos")
         print(f"🧪 logistic_type extraído: {logistic_type}")
 
-        # 🧩 Inspección segura del primer ítem
-        if isinstance(detalle, list) and len(detalle) > 0:
-            item_info = detalle[0]
-            item_id = item_info.get("item_id", "sin_item_id")
+        if items:
+            item_id = items[0].get("item_id", "sin_item_id")
             print(f"🧩 detalle[0] con item_id: {item_id}")
         else:
             print("⚠️ detalle no tiene ítems para mostrar")
 
-        verificado = db.query(MLPedidoCache).filter_by(order_id=order_id).first()
+        verificado = db.query(MLPedidoCache).filter_by(order_id=oid).first()
         if verificado:
             print(f"🟢 Pedido verificado en base: {verificado.order_id}")
         else:
@@ -361,6 +388,7 @@ def guardar_pedido_cache(
 
     except Exception as e:
         print(f"💥 Error al guardar pedido {order_id}: {e}")
+
 
 
 async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
@@ -384,8 +412,9 @@ async def guardar_pedido_en_cache(pedido: dict, db: Session, order_id: str):
 
         # 2) Normalizar ítems (lo que espera el front)
         parsed = parse_order_data(pedido, shipment_id=shipment_id)
-        items = parsed.get("items", [])
+        items = _dedupe_items(parsed.get("items", []))   # 👈 dedupe acá
         cliente = parsed.get("cliente", "")
+
 
         # 3) Estados
         estado_raw = None
